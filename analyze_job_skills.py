@@ -1,58 +1,87 @@
-﻿import json
-from collections import Counter
+﻿import os
 import csv
+from collections import Counter 
+from mongodb_functions import connect_to_mongodb, COLLECTION_NAME
+from file_utilities import get_unique_filename # Import the utility function
 
-def analyze_job_skills(filename):
+# Define the base output filename globally
+BASE_OUTPUT_CSV_FILE = "job_skills_analysis_9_column_mongo_agg.csv"
+
+def aggregate_skill_counts(collection, match_filter):
     """
-    Loads job data from a JSON file, counts skill occurrences, and writes
-    the results to a single 9-column CSV file, including counts and percentages.
+    Uses the MongoDB aggregation pipeline to group and count skills based on a match filter.
+    Returns a list of (skill, count) tuples and the total count of documents matched.
+    """
+    
+    # 1. Count the total jobs matching the filter first
+    total_jobs = collection.count_documents(match_filter)
+
+    # 2. Define the aggregation pipeline
+    pipeline = [
+        # Match documents based on the filter (e.g., remote or non-remote)
+        {'$match': match_filter},
+        # Ensure the document has a non-empty skills list before unwinding
+        {'$match': {'skills': {'$exists': True, '$ne': []}}},
+        # Deconstruct the skills array field from the input documents to output a document for each element
+        {'$unwind': '$skills'},
+        # Group all the documents by skill name and count them
+        {'$group': {
+            '_id': '$skills',
+            'count': {'$sum': 1}
+        }},
+        # Sort by count in descending order
+        {'$sort': {'count': -1}}
+    ]
+
+    try:
+        # Execute the aggregation pipeline
+        results = list(collection.aggregate(pipeline))
+        
+        # Convert results from MongoDB dictionary format to list of (skill, count) tuples
+        skill_counts = [
+            (doc['_id'], doc['count']) for doc in results
+        ]
+        
+        return skill_counts, total_jobs
+        
+    except Exception as e:
+        print(f"Error during MongoDB aggregation: {e}")
+        return [], 0
+
+def analyze_job_skills(collection):
+    """
+    Loads job data from the MongoDB collection using aggregation, counts skill occurrences, 
+    and writes the results to a single 9-column CSV file with a unique filename.
 
     Args:
-        filename (str): The path to the JSON file containing job data.
+        collection (Collection): The MongoDB collection object containing job data.
     """
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            jobs = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: The file '{filename}' was not found.")
-        return
-    except json.JSONDecodeError:
-        print(f"Error: Could not decode JSON from '{filename}'.")
-        return
 
-    all_skills_counter = Counter()
-    remote_skills_counter = Counter()
-    non_remote_skills_counter = Counter()
+    # 1. Define match filters for aggregation
+    all_filter = {} # Match all documents
+    remote_filter = {'job_types': 'Remote'}
+    non_remote_filter = {'job_types': {'$ne': 'Remote'}}
 
-    # Get the total counts for each job category
-    total_all_jobs = len(jobs)
-    total_remote_jobs = 0
-    total_non_remote_jobs = 0
-
-    for job in jobs:
-        if isinstance(job.get('skills'), list):
-            # Update the counter for all jobs
-            all_skills_counter.update(job['skills'])
-        
-        job_is_remote = 'Remote' in job.get('job_types', [])
-        if job_is_remote:
-            total_remote_jobs += 1
-            if isinstance(job.get('skills'), list):
-                remote_skills_counter.update(job['skills'])
-        else:
-            total_non_remote_jobs += 1
-            if isinstance(job.get('skills'), list):
-                non_remote_skills_counter.update(job['skills'])
-
-    sorted_all_skills = all_skills_counter.most_common()
-    sorted_remote_skills = remote_skills_counter.most_common()
-    sorted_non_remote_skills = non_remote_skills_counter.most_common()
+    # 2. Run aggregations to get counts and totals directly from MongoDB
+    print("Running aggregation for All Jobs...")
+    sorted_all_skills, total_all_jobs = aggregate_skill_counts(collection, all_filter)
     
-    # Define the output CSV filename
-    output_csv_filename = "job_skills_analysis_9_column_092925.csv"
+    print("Running aggregation for Remote Jobs...")
+    sorted_remote_skills, total_remote_jobs = aggregate_skill_counts(collection, remote_filter)
+    
+    print("Running aggregation for Non-Remote Jobs...")
+    sorted_non_remote_skills, total_non_remote_jobs = aggregate_skill_counts(collection, non_remote_filter)
+
+
+    if total_all_jobs == 0:
+        print("No job data found in MongoDB collection.")
+        return
+
+    # Determine the unique output CSV filename using the utility function
+    unique_output_filename = get_unique_filename(BASE_OUTPUT_CSV_FILE)
 
     # Write data to a CSV file
-    with open(output_csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(unique_output_filename, 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
 
         # Write the header row for all three sections, now including percentages
@@ -67,22 +96,29 @@ def analyze_job_skills(filename):
         
         # Helper function to calculate percentage and handle division by zero
         def get_percentage(count, total):
-            return f"{(count / total * 100):.1f}%" if total > 0 else "0.0%"
+            return f"{(count / total * 100):.1f}%" if total > 0 and isinstance(count, int) else "0.0%"
             
         for i in range(max_rows):
             # Safely get the skill and count for each list, or use empty strings if no more data
-            all_skill = sorted_all_skills[i][0] if i < len(sorted_all_skills) else ""
-            all_count = sorted_all_skills[i][1] if i < len(sorted_all_skills) else ""
-            all_percent = get_percentage(all_count, total_all_jobs) if all_count else ""
+            
+            # All Jobs Section
+            all_skill, all_count, all_percent = "", "", ""
+            if i < len(sorted_all_skills):
+                all_skill, all_count = sorted_all_skills[i]
+                all_percent = get_percentage(all_count, total_all_jobs)
 
-            remote_skill = sorted_remote_skills[i][0] if i < len(sorted_remote_skills) else ""
-            remote_count = sorted_remote_skills[i][1] if i < len(sorted_remote_skills) else ""
-            remote_percent = get_percentage(remote_count, total_remote_jobs) if remote_count else ""
-            
-            non_remote_skill = sorted_non_remote_skills[i][0] if i < len(sorted_non_remote_skills) else ""
-            non_remote_count = sorted_non_remote_skills[i][1] if i < len(sorted_non_remote_skills) else ""
-            non_remote_percent = get_percentage(non_remote_count, total_non_remote_jobs) if non_remote_count else ""
-            
+            # Remote Jobs Section
+            remote_skill, remote_count, remote_percent = "", "", ""
+            if i < len(sorted_remote_skills):
+                remote_skill, remote_count = sorted_remote_skills[i]
+                remote_percent = get_percentage(remote_count, total_remote_jobs)
+                
+            # Non-Remote Jobs Section
+            non_remote_skill, non_remote_count, non_remote_percent = "", "", ""
+            if i < len(sorted_non_remote_skills):
+                non_remote_skill, non_remote_count = sorted_non_remote_skills[i]
+                non_remote_percent = get_percentage(non_remote_count, total_non_remote_jobs)
+                
             # Write the combined row to the CSV
             csv_writer.writerow([
                 all_skill, all_count, all_percent,
@@ -90,8 +126,17 @@ def analyze_job_skills(filename):
                 non_remote_skill, non_remote_count, non_remote_percent
             ])
 
-    print(f"Successfully saved skill analysis to '{output_csv_filename}'.")
+    print(f"Successfully saved skill analysis to '{unique_output_filename}'.")
 
 if __name__ == '__main__':
-    output_filename = "dice_job_data.json"
-    analyze_job_skills(output_filename)
+    # Connect to MongoDB
+    db = connect_to_mongodb()
+    
+    if db is None:
+        print("Connection failed. Cannot run job skills analysis.")
+    else:
+        # Get the collection object
+        job_collection = db[COLLECTION_NAME]
+        
+        # Run the analysis using the collection
+        analyze_job_skills(job_collection)

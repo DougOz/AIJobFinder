@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
 import os
 import json
-import pandas as pd
+from pymongo import errors
 # Use a free, local embedding model via sentence-transformers
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from PyPDF2 import PdfReader
 
+# Import MongoDB functions and constants
+from mongodb_functions import connect_to_mongodb, COLLECTION_NAME
+
 # Constants
 MAX_CHARS = 16384
 DESCRIPTION_SNIPPET_LENGTH = 1000 # Max characters to take from the description for embedding
 BOILERPLATE_SKIP_CHARS = 200 # Skips this many characters from the start if description is long
-DICE_DATA_FILE = "dice_job_data.json"
-CHECKPOINT_INTERVAL = 100 # Save results every X jobs processed
+CHECKPOINT_INTERVAL = 10 # Control the logging frequency every X jobs processed
 
 # --- SCORING PARAMETERS ---
 MODEL_NAME = 'all-mpnet-base-v2' # More powerful local embedding model
 
-# New fields for the separated scores
+# Fields for the separated scores, used for both Python dict and MongoDB keys
 SEMANTIC_SCORE_FIELD = 'semantic_score_v2'
 SKILLS_SCORE_FIELD = 'skills_intersection_score'
+MATCHED_SKILLS_COUNT_FIELD = 'matched_skills_count'
 # ------------------------------
 
 
@@ -40,17 +43,34 @@ def extract_text_from_pdf(pdf_path):
         print(f"Error reading PDF file {pdf_path}: {e}")
         return ""
 
-def save_jobs_to_json(data, filename=DICE_DATA_FILE):
-    """Saves the job data list back to the specified JSON file for checkpointing."""
-    print(f"\n--- Saving checkpoint to {filename} ---")
+def _update_job_scores_in_mongo(collection, job):
+    """
+    Saves the calculated scores for a single job back to the MongoDB document.
+    It uses the job's 'url' field to locate and update the document.
+    """
+    url = job.get('url')
+    if not url:
+        print("Error: Cannot save score for job without a URL.")
+        return
+
     try:
-        # Use 'w' mode to overwrite the file and 'utf-8' encoding for compatibility
-        with open(filename, 'w', encoding='utf-8') as f:
-            # Using indent=4 makes the JSON file human-readable
-            json.dump(data, f, indent=4)
-        print("Checkpoint saved successfully.")
+        # Use $set to update only the score fields
+        result = collection.update_one(
+            {'url': url},
+            {'$set': {
+                SEMANTIC_SCORE_FIELD: job.get(SEMANTIC_SCORE_FIELD),
+                SKILLS_SCORE_FIELD: job.get(SKILLS_SCORE_FIELD),
+                MATCHED_SKILLS_COUNT_FIELD: job.get(MATCHED_SKILLS_COUNT_FIELD),
+            }}
+        )
+        if result.modified_count == 0 and result.matched_count > 0:
+            # This happens if the scores were already the same, which is fine
+            pass
+        elif result.matched_count == 0:
+            print(f"Warning: No document found to update for URL: {url}")
+            
     except Exception as e:
-        print(f"Error saving data to JSON: {e}")
+        print(f"Error saving scores to MongoDB for job {url}: {e}")
 
 def get_job_embedding_input(job):
     """
@@ -94,12 +114,11 @@ def calculate_semantic_similarity(resume_vector, job_text_for_embedding, embedde
 
 def calculate_skills_intersection_score(resume_text, job_skills):
     """
-    Calculates a score based on how many of the job's required skills
-    are explicitly mentioned in the resume text.
+    Calculates the skills ratio score and returns the score and the raw count of matches.
     Score = (Matched Skills) / (Total Unique Job Skills)
     """
     if not job_skills or not resume_text:
-        return 0.0
+        return 0.0, 0 # Return score and count
 
     # Convert resume text to lowercase for case-insensitive matching
     resume_text_lower = resume_text.lower()
@@ -117,13 +136,13 @@ def calculate_skills_intersection_score(resume_text, job_skills):
     # Score is the ratio of matched skills to total required unique skills
     score = match_count / len(unique_job_skills)
     
-    # Score is a ratio, so it's already between 0.0 and 1.0
-    return score
+    # Return both the ratio score and the raw count
+    return score, match_count
 
-def score_jobs_against_resume(resume_file="DougOsborne_Resume.pdf", job_data_file=DICE_DATA_FILE, checkpoint_interval=CHECKPOINT_INTERVAL):
+def score_jobs_against_resume(resume_file="DougOsborne_Resume.pdf", checkpoint_interval=CHECKPOINT_INTERVAL):
     """
     Main function to initialize the embedding model, load the resume,
-    calculate separate similarity scores for jobs in the data file, and save results.
+    calculate separate similarity scores for jobs in the data file, and save results to MongoDB.
     """
     # --- Local Embedding Setup ---
     try:
@@ -154,47 +173,49 @@ def score_jobs_against_resume(resume_file="DougOsborne_Resume.pdf", job_data_fil
     print("Resume vector generated. Ready to score jobs.")
 
 
-    # 2. Load Jobs Data
-    print(f"\n--- Loading job data from {job_data_file} ---")
-    if not os.path.exists(job_data_file):
-        print(f"WARNING: Job data file '{job_data_file}' not found. Creating empty list.")
-        jobs_data = []
-    else:
-        try:
-            with open(job_data_file, 'r', encoding='utf-8') as f:
-                jobs_data = json.load(f)
-            print(f"Loaded {len(jobs_data)} jobs.")
-        except json.JSONDecodeError as e:
-            print(f"FATAL ERROR: Failed to decode JSON from {job_data_file}: {e}")
-            return
-        except Exception as e:
-            print(f"FATAL ERROR: An unexpected error occurred while loading job data: {e}")
-            return
-            
+    # 2. Connect to MongoDB and Load Jobs Data
+    print("\n--- Connecting to MongoDB ---")
+    db = connect_to_mongodb()
+    if db is None:
+        print("FATAL ERROR: Failed to connect to MongoDB. Exiting.")
+        return
+        
+    job_collection = db[COLLECTION_NAME]
+    
+    print(f"\n--- Loading job data from MongoDB collection: {COLLECTION_NAME} ---")
+    try:
+        # Fetch all documents as a list. We iterate over this list.
+        # We fetch all fields for scoring, but exclude the internal MongoDB '_id' for simplicity.
+        jobs_data = list(job_collection.find({}, {'_id': 0})) 
+        print(f"Loaded {len(jobs_data)} jobs.")
+    except Exception as e:
+        print(f"FATAL ERROR: An unexpected error occurred while loading job data from MongoDB: {e}")
+        return
+
     if not jobs_data:
         print("No job data found to process. Exiting.")
         return
 
     # 3. Process Jobs
     print("\n--- Starting Job Matching and Scoring ---")
-    jobs_processed_since_checkpoint = 0
     jobs_calculated_in_this_run = 0 # Tracks total jobs scored in the current session
     total_semantic_score = 0.0 # Running sum for semantic score average
     total_skills_score = 0.0 # Running sum for skills score average
-
 
     for i, job in enumerate(jobs_data):
         job_index = i + 1
         
         # Get existing scores (for display/recalculation check)
-        old_score = job.get('resume_score', 0.0)
         semantic_score = job.get(SEMANTIC_SCORE_FIELD, 0.0)
         skills_score = job.get(SKILLS_SCORE_FIELD, 0.0)
-
-        # Check if scoring is needed (i.e., if either new score is missing or 0.0)
-        semantic_score_exists = semantic_score > 0.0
-        skills_score_exists = skills_score > 0.0
-        needs_scoring = not (semantic_score_exists and skills_score_exists)
+        
+        # Check if scoring is needed (i.e., if new scores are missing or 0.0)
+        # We also check for the existence of the score fields to handle cases where they might be explicitly 0.
+        semantic_score_exists = SEMANTIC_SCORE_FIELD in job and semantic_score > 0.0
+        skills_score_exists = SKILLS_SCORE_FIELD in job and skills_score > 0.0
+        raw_count_exists = MATCHED_SKILLS_COUNT_FIELD in job
+        
+        needs_scoring = not (semantic_score_exists and skills_score_exists and raw_count_exists)
         
         job_title = job.get('title', 'Untitled')
 
@@ -203,64 +224,59 @@ def score_jobs_against_resume(resume_file="DougOsborne_Resume.pdf", job_data_fil
             # --- CALCULATE SCORES ---
             job_skills = job.get('skills', [])
             job_embedding_input = get_job_embedding_input(job)
+            match_count = 0 
 
             try:
                 # 3a. Calculate Semantic Score
-                if job_embedding_input.strip():
+                if job_embedding_input.strip() and not semantic_score_exists:
                     semantic_score = calculate_semantic_similarity(resume_vector, job_embedding_input, embedder)
-                else:
-                    semantic_score = 0.0
+                #else:
+                   # semantic_score = 0.0
                 
                 # 3b. Calculate Skills Intersection Score
-                skills_score = calculate_skills_intersection_score(resume_text, job_skills)
+                skills_score, match_count = calculate_skills_intersection_score(resume_text, job_skills)
 
-                # Add the new fields (update the dictionary)
+                # Store the new fields in the job dictionary
                 job[SEMANTIC_SCORE_FIELD] = round(semantic_score, 4)
                 job[SKILLS_SCORE_FIELD] = round(skills_score, 4)
+                job[MATCHED_SKILLS_COUNT_FIELD] = match_count
                 
-                # Update running totals *only* if a new score was calculated
+                # Immediately update the document in MongoDB
+                _update_job_scores_in_mongo(job_collection, job)
+
+                # Update running totals 
                 total_semantic_score += semantic_score
                 total_skills_score += skills_score
                 jobs_calculated_in_this_run += 1
-                jobs_processed_since_checkpoint += 1
                 
             except Exception as e:
                 # Log error but continue
                 print(f"Job {job_index} ({job_title}): Error during scoring: {e}. Skipping update for this job.")
 
         
-        # --- NEW: Logging Output ---
-        current_avg_semantic = total_semantic_score / jobs_calculated_in_this_run if jobs_calculated_in_this_run > 0 else 0.0
-        current_avg_skills = total_skills_score / jobs_calculated_in_this_run if jobs_calculated_in_this_run > 0 else 0.0
-        
-        print(
-            f"Job {job_index:<4}/{len(jobs_data)} "
-            f"| Title: {job_title:<50.50} "
-            f"| Old Score: {old_score:.4f} "
-            f"| Semantic: {job.get(SEMANTIC_SCORE_FIELD):.4f} "
-            f"| Skills: {job.get(SKILLS_SCORE_FIELD):.4f} "
-            f"| Avg Sem: {current_avg_semantic:.4f} "
-            f"| Avg Skill: {current_avg_skills:.4f} "
-            f"| Status: {'SCORED' if needs_scoring else 'SKIPPED'}"
-        )
-        # --- End Logging Output ---
-
-        # 4. Save Checkpoint every CHECKPOINT_INTERVAL
-        # Only save if we actually processed jobs since the last save
-        if jobs_processed_since_checkpoint >= checkpoint_interval and needs_scoring:
-            save_jobs_to_json(jobs_data, job_data_file)
-            jobs_processed_since_checkpoint = 0
+        # --- Logging Output (Controlled by CHECKPOINT_INTERVAL) ---
+        if job_index % checkpoint_interval == 0 or job_index == len(jobs_data):
+            current_avg_semantic = total_semantic_score / jobs_calculated_in_this_run if jobs_calculated_in_this_run > 0 else 0.0
+            current_avg_skills = total_skills_score / jobs_calculated_in_this_run if jobs_calculated_in_this_run > 0 else 0.0
             
-    # 5. Final Save
-    if jobs_processed_since_checkpoint > 0:
-        print("\n--- Processing finished. Performing final save. ---")
-        save_jobs_to_json(jobs_data, job_data_file)
-    else:
-        print("\n--- Processing finished. No unsaved changes since last checkpoint. ---")
-        
+            # Note: We display the semantic score field for consistency, even if it's the old 'resume_score' equivalent
+            # For simplicity, we can use the job dict accessors
+            print(
+                f"Job {job_index:<4}/{len(jobs_data)} "
+                f"| Title: {job_title:<50.50} "
+                f"| Semantic: {job.get(SEMANTIC_SCORE_FIELD):.4f} "
+                f"| Skills: {job.get(SKILLS_SCORE_FIELD):.4f} "
+                f"| Matched Count: {job.get(MATCHED_SKILLS_COUNT_FIELD, 0):<3} "
+                f"| Avg Sem: {current_avg_semantic:.4f} "
+                f"| Avg Skill: {current_avg_skills:.4f} "
+                f"| Status: {'SCORED' if needs_scoring else 'SKIPPED'}"
+            )
+        # --- End Logging Output ---
+            
+    # 5. Final Summary
     print(f"\n--- Summary ---")
     print(f"Total jobs loaded: {len(jobs_data)}")
-    print(f"New scores calculated: {jobs_calculated_in_this_run}")
+    print(f"New scores calculated and saved to MongoDB: {jobs_calculated_in_this_run}")
 
 if __name__ == '__main__':
     score_jobs_against_resume()

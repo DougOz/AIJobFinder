@@ -1,13 +1,56 @@
 import asyncio
 from playwright.async_api import async_playwright
-import json
-import os
 import re
 import itertools
+from pymongo import errors
 
 # Import the working scrape_dice_job function from your separate file.
 from build_dice_url import build_dice_url
-from dice_scraper import scrape_dice_job
+from dice_job_scraper import scrape_dice_job
+
+# Import MongoDB functions and constants
+from mongodb_functions import connect_to_mongodb, COLLECTION_NAME
+
+# --- MongoDB Data Management Functions ---
+
+def load_existing_urls_from_mongo(collection):
+    """Loads all existing job URLs from MongoDB to identify which jobs to skip/update."""
+    try:
+        # Query only for the 'url' field and return a set of unique URLs
+        # Using distinct() is highly efficient for getting all unique values of a field
+        urls = collection.distinct('url')
+        print(f"Loaded {len(urls)} existing job URLs from MongoDB for check.")
+        return set(urls)
+    except Exception as e:
+        print(f"Error loading existing URLs from MongoDB: {e}")
+        return set()
+
+def update_job_search_tag(collection, url, search_string):
+    """Updates an existing job document by adding a new search_string to the 'searches' array."""
+    try:
+        # $addToSet ensures the search_string is only added if it's not already in the array
+        result = collection.update_one(
+            {'url': url},
+            {'$addToSet': {'searches': search_string}}
+        )
+        return result.modified_count
+    except Exception as e:
+        print(f"Error updating job {url} search tag: {e}")
+        return 0
+        
+def insert_new_job(collection, job_details, search_string):
+    """Inserts a newly scraped job document into MongoDB with the initial search tag."""
+    job_details['searches'] = [search_string]
+    try:
+        collection.insert_one(job_details)
+        return True
+    except errors.DuplicateKeyError:
+        # If a duplicate is encountered during insertion, fall back to updating the search tag
+        print(f"Duplicate key error for job {job_details.get('url')}. Updating search tag instead.")
+        return update_job_search_tag(collection, job_details['url'], search_string)
+    except Exception as e:
+        print(f"Error inserting new job: {e}")
+        return False
 
 # --- Multi-Page Scraper using Playwright ---
 
@@ -71,95 +114,83 @@ async def get_unique_job_links(base_url, total_pages, delay_seconds=1):
 
 # --- Data Management and Orchestration ---
 
-def save_data_to_json(data, filename):
-    """Saves a list of dictionaries to a JSON file."""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
-    print(f"Successfully saved {len(data)} job listings to {filename}.")
-
-def load_existing_data(filename):
-    """Loads existing data from a JSON file if it exists."""
-    if os.path.exists(filename):
-        print(f"Loading existing data from {filename}...")
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
-
-async def main_scraper_orchestrator(search_url, filename, batch_size=25):
+async def main_scraper_orchestrator(search_url):
     """
-    Main function to orchestrate the entire scraping and data saving process
-    with a checkpointing feature.
+    Main function to orchestrate the entire scraping and MongoDB saving process.
     """
+    # 1. Database Connection Setup
+    db = connect_to_mongodb()
+    if db is None:
+        return
+        
+    job_collection = db[COLLECTION_NAME]
+
     # Extract the search string from the URL
     search_string = search_url.split('?')[1] if '?' in search_url else 'N/A'
+    print(f"\n=======================================================")
     print(f"Starting job scraping pipeline for search: {search_string}")
+    print(f"=======================================================")
     
-    # 1. Get total pages and all job links
+    # 2. Get total pages and all job links
     total_pages = await get_total_pages(search_url)
     all_job_links = await get_unique_job_links(search_url, total_pages, delay_seconds=2)
     
-    # 2. Load existing data and identify which links to scrape
-    existing_jobs = load_existing_data(filename)
-    existing_urls = {job.get('url') for job in existing_jobs}
+    # 3. Load existing URLs from MongoDB to identify which links to scrape
+    existing_urls = load_existing_urls_from_mongo(job_collection)
     
-    links_to_scrape = [link for link in all_job_links if link not in existing_urls]
-    links_to_update = [link for link in all_job_links if link in existing_urls]
+    links_to_scrape = []
+    links_to_update = []
 
-    # Map existing URLs to their job dictionaries for easy lookup
-    existing_jobs_by_url = {job['url']: job for job in existing_jobs}
-
-    # 3. Update existing jobs with the new search string
-    print(f"Updating {len(links_to_update)} existing jobs with new search...")
+    for link in all_job_links:
+        if link in existing_urls:
+            links_to_update.append(link)
+        else:
+            links_to_scrape.append(link)
+    
+    # 4. Update existing jobs with the new search string
+    print(f"Updating {len(links_to_update)} existing jobs with new search tag...")
     for link in links_to_update:
-        job = existing_jobs_by_url[link]
-        if 'searches' not in job:
-            job['searches'] = []
-        if search_string not in job['searches']:
-            job['searches'].append(search_string)
+        update_job_search_tag(job_collection, link, search_string)
 
-    # 4. Scrape details for new links
-    print(f"Found {len(links_to_scrape)} new job links to scrape.")
-    scraped_jobs = []
+    # 5. Scrape details for new links and insert them
+    print(f"Found {len(links_to_scrape)} new job links to scrape and insert.")
+    
+    scraped_count = 0
     for i, link in enumerate(links_to_scrape):
         job_details = scrape_dice_job(link)
-        if job_details:
-            # Populate the searches field for new jobs
-            job_details['searches'] = [search_string]
-            scraped_jobs.append(job_details)
         
-        #print(f"Waiting for 1 second before scraping next job...")
+        if job_details:
+            # Insert or update job details in MongoDB immediately after scraping
+            if insert_new_job(job_collection, job_details, search_string):
+                scraped_count += 1
+        
+        if(scraped_count %50 == 0) :        
+            print(f"-> Scraped and Saved {i+1}/{len(links_to_scrape)} new jobs.")
+        
+        # Wait 1 second between scraping requests
         await asyncio.sleep(1)
 
-        # Checkpoint: Save to JSON file every `batch_size` jobs
-        if (i + 1) % batch_size == 0 or (i + 1) == len(links_to_scrape):
-            print(f"Checkpoint: Saving {len(scraped_jobs)} new jobs to disk...")
-            
-            # Combine new and updated data and save
-            updated_jobs = list(existing_jobs_by_url.values()) + scraped_jobs
-            save_data_to_json(updated_jobs, filename)
-            
-            # Reset the scraped_jobs list and update the existing_jobs_by_url
-            scraped_jobs = []
-            existing_jobs_by_url = {job['url']: job for job in updated_jobs}
-
-    # Final save to ensure all updates are written
-    updated_jobs = list(existing_jobs_by_url.values()) + scraped_jobs
-    save_data_to_json(updated_jobs, filename)
     print(f"Scraping pipeline finished for search: {search_string}")
+    print(f"Total new jobs inserted: {scraped_count}")
 
-async def run_multiple_searches(search_urls, filename):
+async def run_multiple_searches(search_urls):
     """
     Main function to run the scraper for a list of search URLs.
     """
     for url in search_urls:
-        await main_scraper_orchestrator(url, filename)
+        await main_scraper_orchestrator(url)
         print("\n--- Moving to next search ---\n")
         
 if __name__ == '__main__':
 
     locations = [
         None,
-        "New York, NY"
+        "New York, NY",
+        "San Francisco, CA",
+        "Seattle, WA",
+        "Dallas, TX",
+        "Chicago, IL",
+        "Denver, CO"
     ]
     workplace_types = [
         None,
@@ -169,15 +200,6 @@ if __name__ == '__main__':
         "software engineer",
         "software developer"
     ]
-    locations = [
-        None,
-        "New York, NY"
-        "San Francisco, CA",
-        "Seattle, WA",
-        "Dallas, TX",
-        "Chicago, IL",
-        "Denver, CO"
-        ]
 
     search_queries = []
     for loc, work_type, search_str in itertools.product(locations, workplace_types, search_strings):
@@ -187,6 +209,7 @@ if __name__ == '__main__':
             workplace_type=work_type
         )
         search_queries.append(url)
-    output_filename = "dice_job_data.json"
     
-    asyncio.run(run_multiple_searches(search_queries, output_filename))
+    # The output filename constant is no longer needed here as data goes to MongoDB
+    
+    asyncio.run(run_multiple_searches(search_queries))
