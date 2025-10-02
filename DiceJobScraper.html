@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dice Job Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .container {
+            max-width: 900px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="bg-white p-6 md:p-10 rounded-xl shadow-lg border border-gray-200">
+            <h1 class="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-6">Dice Job Scraper</h1>
+            <p class="text-center text-gray-500 mb-8">Enter the URL of a Dice job posting to scrape its details.</p>
+
+            <form id="scrape-form" class="mb-8">
+                <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4">
+                    <input type="url" id="job-url" name="job-url" placeholder="e.g., https://www.dice.com/job/123..." required class="flex-grow w-full md:w-auto px-4 py-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                    <button type="submit" id="scrape-button" class="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                        Scrape Job
+                    </button>
+                </div>
+            </form>
+
+            <!-- Loading Indicator -->
+            <div id="loading-indicator" class="hidden text-center text-gray-500">
+                <svg class="animate-spin h-8 w-8 text-blue-500 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p>Scraping job details...</p>
+            </div>
+
+            <!-- Job Details Display -->
+            <div id="job-details-container" class="hidden mt-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Job Title</p>
+                        <p id="job-title" class="text-lg font-bold text-gray-800"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Company</p>
+                        <p id="company-name" class="text-lg font-semibold text-gray-700"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Location</p>
+                        <p id="job-location" class="text-lg text-gray-700"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Posted Date</p>
+                        <p id="posted-date" class="text-lg text-gray-700"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Updated Date</p>
+                        <p id="updated-date" class="text-lg text-gray-700"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium mb-1">Salary</p>
+                        <p id="job-salary" class="text-lg text-gray-700"></p>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <p class="text-gray-500 text-sm font-medium mb-1">Job Type(s)</p>
+                    <div id="job-types" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="mb-6">
+                    <p class="text-gray-500 text-sm font-medium mb-1">Skills</p>
+                    <div id="job-skills" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div>
+                    <p class="text-gray-500 text-sm font-medium mb-1">Description</p>
+                    <div id="job-description" class="prose max-w-none text-gray-700"></div>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="error-message" class="hidden text-center text-red-500">
+                <p id="error-text">An error occurred. Please check the URL and try again.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('scrape-form');
+            const urlInput = document.getElementById('job-url');
+            const jobDetailsContainer = document.getElementById('job-details-container');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const url = urlInput.value;
+
+                // Show loading indicator, hide other elements
+                jobDetailsContainer.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+                loadingIndicator.classList.remove('hidden');
+
+                try {
+                    // Reverting to a relative path, which is best practice when the
+                    // web page and the API endpoint are served by the same server.
+                    const apiUrl = 'http://127.0.0.1:5000/scrape_job';
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: url })
+                    });
+
+                    if (!response.ok) {
+                        const errorMsg = `HTTP error! Status: ${response.status} - ${response.statusText}`;
+                        console.error(errorMsg);
+                        errorText.textContent = errorMsg;
+                        errorMessage.classList.remove('hidden');
+                        return; // Exit the function on error
+                    }
+
+                    const jobData = await response.json();
+
+                    if (jobData && jobData.title && jobData.description) {
+                        // Populate the HTML with the scraped data
+                        document.getElementById('job-title').textContent = jobData.title;
+                        document.getElementById('company-name').textContent = jobData.company;
+                        document.getElementById('job-location').textContent = jobData.location;
+                        document.getElementById('posted-date').textContent = jobData.posted_date;
+                        document.getElementById('updated-date').textContent = jobData.updated_date;
+                        document.getElementById('job-salary').textContent = jobData.salary;
+                        document.getElementById('job-description').innerHTML = jobData.description.replace(/\n/g, '<br>');
+
+                        // Handle skills and job types as lists of tags
+                        const skillsContainer = document.getElementById('job-skills');
+                        skillsContainer.innerHTML = '';
+                        if (jobData.skills && Array.isArray(jobData.skills)) {
+                            jobData.skills.forEach(skill => {
+                                const span = document.createElement('span');
+                                span.textContent = skill;
+                                span.classList.add('bg-blue-200', 'text-blue-800', 'text-sm', 'font-medium', 'px-2.5', 'py-0.5', 'rounded-full');
+                                skillsContainer.appendChild(span);
+                            });
+                        }
+
+                        const jobTypesContainer = document.getElementById('job-types');
+                        jobTypesContainer.innerHTML = '';
+                        if (jobData.job_types && Array.isArray(jobData.job_types)) {
+                            jobData.job_types.forEach(type => {
+                                const span = document.createElement('span');
+                                span.textContent = type;
+                                span.classList.add('bg-green-200', 'text-green-800', 'text-sm', 'font-medium', 'px-2.5', 'py-0.5', 'rounded-full');
+                                jobTypesContainer.appendChild(span);
+                            });
+                        }
+
+                        jobDetailsContainer.classList.remove('hidden');
+                    } else {
+                        errorText.textContent = 'Failed to retrieve job details. The provided URL might not be a valid job posting.';
+                        errorMessage.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Scraping failed:', error);
+                    errorText.textContent = `An error occurred: ${error.message}`;
+                    errorMessage.classList.remove('hidden');
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
