@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c7cc07d7-b383-458c-a3bb-e03267415145</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>analyze_job_skills.py</StartupFile>
+    <StartupFile>resume_match_scorer.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -32,10 +32,15 @@
     <Compile Include="file_utilities.py" />
     <Compile Include="load_jobs_to_mongodb.py" />
     <Compile Include="mongodb_functions.py" />
+    <Compile Include="populate_firestore_skills.py" />
     <Compile Include="resume_match_scorer.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|VisualStudio|env1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="SkillRater_Local_Runner.html" />
+    <Content Include="user_skill_rater.jsx" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

@@ -102,7 +102,7 @@ def main():
     unique_output_filename = get_unique_filename(BASE_OUTPUT_CSV_FILE)
 
     print("--- Connecting to MongoDB ---")
-    db = connect_to_mongodb()
+    client, db = connect_to_mongodb()
     if db is None:
         print("FATAL ERROR: Failed to connect to MongoDB. Exiting.")
         return

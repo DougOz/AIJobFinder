@@ -119,7 +119,7 @@ async def main_scraper_orchestrator(search_url):
     Main function to orchestrate the entire scraping and MongoDB saving process.
     """
     # 1. Database Connection Setup
-    db = connect_to_mongodb()
+    client, db = connect_to_mongodb()
     if db is None:
         return
         

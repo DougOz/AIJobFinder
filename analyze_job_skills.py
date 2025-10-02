@@ -130,7 +130,7 @@ def analyze_job_skills(collection):
 
 if __name__ == '__main__':
     # Connect to MongoDB
-    db = connect_to_mongodb()
+    client, db = connect_to_mongodb()
     
     if db is None:
         print("Connection failed. Cannot run job skills analysis.")

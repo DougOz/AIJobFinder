@@ -79,7 +79,7 @@ def main():
         return
 
     # 2. Connect to DB (Uses connect_to_mongodb imported from mongodb_functions)
-    db = connect_to_mongodb()
+    client, db = connect_to_mongodb()
     if db is None:
         return
     

@@ -175,7 +175,7 @@ def score_jobs_against_resume(resume_file="DougOsborne_Resume.pdf", checkpoint_i
 
     # 2. Connect to MongoDB and Load Jobs Data
     print("\n--- Connecting to MongoDB ---")
-    db = connect_to_mongodb()
+    client, db = connect_to_mongodb()
     if db is None:
         print("FATAL ERROR: Failed to connect to MongoDB. Exiting.")
         return
