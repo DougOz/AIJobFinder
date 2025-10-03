@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c7cc07d7-b383-458c-a3bb-e03267415145</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>resume_match_scorer.py</StartupFile>
+    <StartupFile>populate_firestore_skills.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

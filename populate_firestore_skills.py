@@ -65,8 +65,9 @@ def get_master_skills_from_mongo():
         # Execute the aggregation pipeline
         results = list(collection.aggregate(pipeline))
         
-        # Extract just the skill names
-        skill_list = [doc['_id'] for doc in results]
+        # New: Extract skill name and count
+        skill_data = [{'skill': doc['_id'], 'count': doc['count']} for doc in results]
+        return skill_data # Return the list of objects
         
         print(f"Found {len(skill_list)} unique skills via aggregation.")
         return skill_list
