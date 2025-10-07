@@ -3,6 +3,22 @@
   "WorkspaceRootPath": "F:\\AIJobFinder\\AIJobFinder\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\sync_ratings_to_mongo.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:sync_ratings_to_mongo.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:mongodb_functions.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\load_jobs_to_mongodb.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:load_jobs_to_mongodb.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|F:\\AIJobFinder\\AIJobFinder\\dice_job_data.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:dice_job_data.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\SkillRater_Local_Runner.html||{40D31677-CBC0-4297-A9EF-89D907823A98}",
       "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:SkillRater_Local_Runner.html||{40D31677-CBC0-4297-A9EF-89D907823A98}"
     },
@@ -13,10 +29,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\user_skill_rater.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
       "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:user_skill_rater.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|F:\\AIJobFinder\\AIJobFinder\\dice_job_data.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:dice_job_data.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\resume_match_scorer.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -31,16 +43,8 @@
       "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:export_jobs_to_csv.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\load_jobs_to_mongodb.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:load_jobs_to_mongodb.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\analyze_job_skills.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:analyze_job_skills.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|solutionrelative:mongodb_functions.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{C7CC07D7-B383-458C-A3BB-E03267415145}|AIJobFinder.pyproj|F:\\AIJobFinder\\AIJobFinder\\file_utilities.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -72,8 +76,25 @@
         },
         {
           "DockedHeight": 154,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 1,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:2:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "sync_ratings_to_mongo.py",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\sync_ratings_to_mongo.py",
+              "RelativeDocumentMoniker": "sync_ratings_to_mongo.py",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\sync_ratings_to_mongo.py",
+              "RelativeToolTip": "sync_ratings_to_mongo.py",
+              "ViewState": "AgIAAHIAAAAAAAAAAAAiwJYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-10-07T16:02:24.388Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Document",
               "DocumentIndex": 3,
@@ -89,67 +110,41 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 4,
+              "Title": "SkillRater_Local_Runner.html",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\SkillRater_Local_Runner.html",
+              "RelativeDocumentMoniker": "SkillRater_Local_Runner.html",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\SkillRater_Local_Runner.html",
+              "RelativeToolTip": "SkillRater_Local_Runner.html",
+              "ViewState": "AgIAAFoAAAAAAAAAAAAAABkBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001512|",
+              "WhenOpened": "2025-10-02T17:56:07.36Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
               "Title": "load_jobs_to_mongodb.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\load_jobs_to_mongodb.py",
               "RelativeDocumentMoniker": "load_jobs_to_mongodb.py",
               "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\load_jobs_to_mongodb.py",
               "RelativeToolTip": "load_jobs_to_mongodb.py",
-              "ViewState": "AgIAADwAAAAAAAAAAAAwwE8AAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAlAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
               "WhenOpened": "2025-10-02T16:36:37.619Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "resume_match_scorer.py",
-              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\resume_match_scorer.py",
-              "RelativeDocumentMoniker": "resume_match_scorer.py",
-              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\resume_match_scorer.py",
-              "RelativeToolTip": "resume_match_scorer.py",
-              "ViewState": "AgIAAIoAAAAAAAAAAAAwwK8AAAAMAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T17:17:55.227Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "user_skill_rater.jsx",
-              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\user_skill_rater.jsx",
-              "RelativeDocumentMoniker": "user_skill_rater.jsx",
-              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\user_skill_rater.jsx",
-              "RelativeToolTip": "user_skill_rater.jsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003663|",
-              "WhenOpened": "2025-10-02T17:51:40.967Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
               "DocumentIndex": 1,
-              "Title": "populate_firestore_skills.py",
-              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\populate_firestore_skills.py",
-              "RelativeDocumentMoniker": "populate_firestore_skills.py",
-              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\populate_firestore_skills.py",
-              "RelativeToolTip": "populate_firestore_skills.py",
-              "ViewState": "AgIAAAYAAAAAAAAAAAAAABoAAAAHAAAAAAAAAA==",
+              "Title": "mongodb_functions.py",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py",
+              "RelativeDocumentMoniker": "mongodb_functions.py",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py",
+              "RelativeToolTip": "mongodb_functions.py",
+              "ViewState": "AgIAAAIAAAAAAAAAAAAkwA0AAAAEAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T18:12:23.218Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "SkillRater_Local_Runner.html",
-              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\SkillRater_Local_Runner.html",
-              "RelativeDocumentMoniker": "SkillRater_Local_Runner.html",
-              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\SkillRater_Local_Runner.html",
-              "RelativeToolTip": "SkillRater_Local_Runner.html",
-              "ViewState": "AgIAAN0BAAAAAAAAAAAuwAYCAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001512|",
-              "WhenOpened": "2025-10-02T17:56:07.36Z",
+              "WhenOpened": "2025-10-02T16:48:29.007Z",
               "EditorCaption": ""
             },
             {
@@ -158,19 +153,48 @@
             },
             {
               "$type": "Bookmark",
-              "Name": "ST:2:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{004be353-6879-467c-9d1e-9ac23cdf6d49}"
-            },
-            {
-              "$type": "Bookmark",
               "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
             },
             {
               "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "resume_match_scorer.py",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\resume_match_scorer.py",
+              "RelativeDocumentMoniker": "resume_match_scorer.py",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\resume_match_scorer.py",
+              "RelativeToolTip": "resume_match_scorer.py",
+              "ViewState": "AgIAAIoAAAAAAAAAAAAwwK8AAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-10-02T17:17:55.227Z"
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 6,
+              "Title": "user_skill_rater.jsx",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\user_skill_rater.jsx",
+              "RelativeDocumentMoniker": "user_skill_rater.jsx",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\user_skill_rater.jsx",
+              "RelativeToolTip": "user_skill_rater.jsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003663|",
+              "WhenOpened": "2025-10-02T17:51:40.967Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "populate_firestore_skills.py",
+              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\populate_firestore_skills.py",
+              "RelativeDocumentMoniker": "populate_firestore_skills.py",
+              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\populate_firestore_skills.py",
+              "RelativeToolTip": "populate_firestore_skills.py",
+              "ViewState": "AgIAAPwAAAAAAAAAAAAuwCQBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-10-02T18:12:23.218Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
               "Title": "export_jobs_to_csv.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\export_jobs_to_csv.py",
               "RelativeDocumentMoniker": "export_jobs_to_csv.py",
@@ -178,12 +202,11 @@
               "RelativeToolTip": "export_jobs_to_csv.py",
               "ViewState": "AgIAAFEAAAAAAAAAAAAAAFwAAAAwAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T15:30:57.481Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T15:30:57.481Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 8,
               "Title": "dice_search_scraper.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\dice_search_scraper.py",
               "RelativeDocumentMoniker": "dice_search_scraper.py",
@@ -191,12 +214,11 @@
               "RelativeToolTip": "dice_search_scraper.py",
               "ViewState": "AgIAAKMAAAAAAAAAAAAwwH0AAAAoAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T15:31:00.918Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T15:31:00.918Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 10,
               "Title": "analyze_job_skills.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\analyze_job_skills.py",
               "RelativeDocumentMoniker": "analyze_job_skills.py",
@@ -204,12 +226,11 @@
               "RelativeToolTip": "analyze_job_skills.py",
               "ViewState": "AgIAAG8AAAAAAAAAAAAwwIMAAAAMAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T16:54:58.191Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T16:54:58.191Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 11,
               "Title": "file_utilities.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\file_utilities.py",
               "RelativeDocumentMoniker": "file_utilities.py",
@@ -217,25 +238,11 @@
               "RelativeToolTip": "file_utilities.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAxAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T17:31:51.312Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T17:31:51.312Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "mongodb_functions.py",
-              "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py",
-              "RelativeDocumentMoniker": "mongodb_functions.py",
-              "ToolTip": "F:\\AIJobFinder\\AIJobFinder\\mongodb_functions.py",
-              "RelativeToolTip": "mongodb_functions.py",
-              "ViewState": "AgIAAAwAAAAAAAAAAAAAAB8AAAAaAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T16:48:29.007Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 12,
               "Title": "dice_job_scraper.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\dice_job_scraper.py",
               "RelativeDocumentMoniker": "dice_job_scraper.py",
@@ -243,12 +250,11 @@
               "RelativeToolTip": "dice_job_scraper.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T16:51:55.662Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T16:51:55.662Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 13,
               "Title": "AIJobFinder.py",
               "DocumentMoniker": "F:\\AIJobFinder\\AIJobFinder\\AIJobFinder.py",
               "RelativeDocumentMoniker": "AIJobFinder.py",
@@ -256,8 +262,7 @@
               "RelativeToolTip": "AIJobFinder.py",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2025-10-02T15:11:26.723Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-02T15:11:26.723Z"
             }
           ]
         }

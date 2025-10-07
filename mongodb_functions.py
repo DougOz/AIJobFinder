@@ -5,7 +5,7 @@ from pymongo import MongoClient, errors
 # All scripts connecting to MongoDB should import these constants.
 MONGO_URI = "mongodb://localhost:27017/" 
 DATABASE_NAME = "JobMatchDB"
-COLLECTION_NAME = "dice_jobs"
+#COLLECTION_NAME = "dice_jobs"
 # -----------------------------
 
 def connect_to_mongodb():

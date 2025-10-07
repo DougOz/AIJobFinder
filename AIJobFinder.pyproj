@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c7cc07d7-b383-458c-a3bb-e03267415145</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>populate_firestore_skills.py</StartupFile>
+    <StartupFile>sync_ratings_to_mongo.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -34,6 +34,7 @@
     <Compile Include="mongodb_functions.py" />
     <Compile Include="populate_firestore_skills.py" />
     <Compile Include="resume_match_scorer.py" />
+    <Compile Include="sync_ratings_to_mongo.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="Global|VisualStudio|env1" />
