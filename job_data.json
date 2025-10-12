@@ -1,0 +1,35 @@
+{
+    "101": {
+        "url": "https://example.com/job/101",
+        "title": "Data Science Lead (Remote)",
+        "company": "Analytics Nexus",
+        "location": "Remote (Global)",
+        "posted_date": "2025-09-15",
+        "job_types": ["Full-time", "Remote"],
+        "salary": "$170,000 - $190,000",
+        "skills": ["Python", "Machine Learning", "TensorFlow", "Pandas", "SQL", "Big Data", "AWS"],
+        "description": "Lead a team of data scientists focusing on predictive modeling and customer segmentation. This role requires expertise in **Machine Learning (ML)** pipelines and extensive experience with Python, TensorFlow, and large-scale data processing on AWS. We offer an unparalleled opportunity for high-impact work and full remote flexibility."
+    },
+    "102": {
+        "url": "https://example.com/job/102",
+        "title": "Junior Frontend Developer",
+        "company": "Creative Agency Z",
+        "location": "New York, NY",
+        "posted_date": "2025-10-01",
+        "job_types": ["Full-time", "On-site"],
+        "salary": "$75,000 - $90,000",
+        "skills": ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS", "UI/UX", "TypeScript"],
+        "description": "Join our fast-paced creative team to build beautiful, responsive user interfaces. You must be proficient in React and modern CSS, ideally with experience using Tailwind CSS. While a desire to learn **TypeScript** is required, full proficiency is not expected immediately. This is an on-site role in our Manhattan office, offering great mentoring opportunities."
+    },
+    "103": {
+        "url": "https://example.com/job/103",
+        "title": "Backend API Engineer (Go/Python)",
+        "company": "Scalable Systems Co.",
+        "location": "San Francisco, CA",
+        "posted_date": "2025-08-20",
+        "job_types": ["Full-time", "Hybrid"],
+        "salary": "$150,000 - $175,000",
+        "skills": ["Python", "Go", "SQL", "PostgreSQL", "REST APIs", "Docker", "Kubernetes"],
+        "description": "We are looking for a backend specialist to build and maintain high-performance, low-latency APIs. Core languages are Go and Python. Deep knowledge of SQL databases like PostgreSQL is essential for optimizing complex queries. Experience with cloud deployment using **Docker and Kubernetes** is a must-have for this hybrid role."
+    }
+}

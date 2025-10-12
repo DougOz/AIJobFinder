@@ -1,0 +1,96 @@
+{
+    "Doug": {
+        "profile_id": "Doug",
+        "skills": [
+            {
+                "skill_name": "Python",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "SQL",
+                "user_rating": 3
+            },
+            {
+                "skill_name": "Machine Learning",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "Big Data",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "AWS",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "TensorFlow",
+                "user_rating": 1
+            },
+            {
+                "skill_name": "Pandas",
+                "user_rating": 1
+            }
+        ]
+    },
+    "JobRaterUser": {
+        "profile_id": "JobRaterUser",
+        "skills": [
+            {
+                "skill_name": "SQL",
+                "user_rating": 3
+            },
+            {
+                "skill_name": "Python",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "Machine Learning",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "Big Data",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "AWS",
+                "user_rating": 2
+            },
+            {
+                "skill_name": "TensorFlow",
+                "user_rating": 1
+            },
+            {
+                "skill_name": "Pandas",
+                "user_rating": 1
+            },
+            {
+                "skill_name": "React",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "JavaScript",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "HTML",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "CSS",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "Tailwind CSS",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "UI/UX",
+                "user_rating": 0
+            },
+            {
+                "skill_name": "TypeScript",
+                "user_rating": 0
+            }
+        ]
+    }
+}
