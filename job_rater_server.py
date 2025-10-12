@@ -34,9 +34,13 @@ else:
 DEFAULT_PROFILE_NAME = 'Doug' 
 
 
-@app.route('/api/jobs/list', methods=['GET'])
+# --- FIX: Changed route from '/api/jobs/list' to '/api/jobs' to match the frontend fetch ---
+@app.route('/api/jobs', methods=['GET'])
 def get_job_list():
-    """Returns a list of all available job IDs from the MongoDB 'dice_jobs' collection."""
+    """
+    Returns a list of all available job IDs (as a JSON array of strings) 
+    from the MongoDB 'dice_jobs' collection.
+    """
     if jobs_collection is None:
         return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
     
@@ -46,9 +50,11 @@ def get_job_list():
         
         if not job_ids:
             print(f"MongoDB '{jobs_collection.name}' collection is empty.")
-            return jsonify({"job_ids": []})
+            # Return empty array if no jobs are found
+            return jsonify([]) 
 
-        return jsonify({"job_ids": job_ids})
+        # --- FIX: Return the array of IDs directly, not wrapped in an object ---
+        return jsonify(job_ids)
     except Exception as e:
         print(f"Error fetching job list: {e}")
         return jsonify({"error": f"Internal server error when listing jobs: {e}"}), 500
@@ -188,6 +194,7 @@ if __name__ == '__main__':
     # Initial setup check and final client closing
     try:
         # Check if the jobs collection exists and is empty
+        # Note: count_documents({}) is preferred over estimated_document_count() for accuracy
         if db is not None and jobs_collection is not None and jobs_collection.count_documents({}) == 0:
             print(f"WARNING: The '{jobs_collection.name}' collection in '{DATABASE_NAME}' is empty. Please populate it with job documents.")
         

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Job Rater Pro</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter Font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f9;
+        }
+        /* Custom highlight style */
+        .highlighted-text {
+            background-color: #ffeb3b80; /* Light yellow with transparency */
+            border-radius: 4px;
+            padding: 1px 3px;
+        }
+        /* Custom context menu styles */
+        #custom-context-menu {
+            position: absolute;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            padding: 4px;
+            display: none;
+            min-width: 180px;
+        }
+        #custom-context-menu button {
+            width: 100%;
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 0.9rem;
+            color: #374151;
+            transition: background-color 0.1s;
+        }
+        #custom-context-menu button:hover {
+            background-color: #f3f4f6;
+        }
+
+        /* Responsive styling for the main container */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+        @media (min-width: 1024px) { /* lg breakpoint */
+            .main-grid {
+                grid-template-columns: 280px 1fr; /* Left sidebar (280px) and main content */
+            }
+        }
+    </style>
+    <!-- Phosphor Icons for a clean look -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/dist/p.min.js"></script>
+</head>
+
+<body class="min-h-screen">
+
+    <!-- 1. FIXED HEADER (REQUEST 1) -->
+    <header id="job-header" class="sticky top-0 bg-white shadow-lg p-3 z-50 transition-all duration-300">
+        <h1 class="text-xl font-bold text-gray-800 truncate">Job Rater Pro</h1>
+        <p id="header-details" class="text-sm text-gray-500 mt-1"></p>
+    </header>
+
+    <!-- MAIN CONTENT GRID -->
+    <main id="main-app" class="main-grid pt-4">
+
+        <!-- LEFT COLUMN: Scores and Skills -->
+        <div id="left-sidebar" class="space-y-6">
+            
+            <!-- Overall Match & Scores -->
+            <section class="bg-white p-5 rounded-xl shadow-lg">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                    <i class="ph-fill ph-chart-bar text-indigo-500 mr-2"></i> Match Scores
+                </h2>
+                
+                <div class="space-y-3">
+                    <!-- Resume Match Score (REQUEST 4) -->
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span class="text-sm font-medium text-gray-600">Resume Match</span>
+                        <span id="resume-match-score" class="text-base font-bold text-indigo-600">-</span>
+                    </div>
+
+                    <!-- Semantic Score V2 (REQUEST 5) -->
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span class="text-sm font-medium text-gray-600">Semantic Score V2</span>
+                        <span id="semantic-score-v2" class="text-base font-bold text-indigo-600">-</span>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Skill Proficiency Summary (REQUEST 3) -->
+            <section class="bg-white p-5 rounded-xl shadow-lg">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                    <i class="ph-fill ph-check-square text-green-500 mr-2"></i> Skill Status
+                </h2>
+                <div id="skill-counts" class="grid grid-cols-2 gap-3 text-center">
+                    <!-- Dynamic counters will be injected here -->
+                </div>
+            </section>
+
+            <!-- Skills Proficiency List (REQUEST 2) -->
+            <section class="bg-white p-5 rounded-xl shadow-lg">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                    <i class="ph-fill ph-book-open text-orange-500 mr-2"></i> Required Skills
+                </h2>
+                <div id="skills-list" class="space-y-2">
+                    <!-- Compact list of skills will be injected here -->
+                    <p class="text-sm text-gray-400">Loading skills...</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- RIGHT COLUMN: Job Description, Rating, Notes -->
+        <div id="right-content" class="space-y-6">
+
+            <!-- Overall Rating & Action -->
+            <section class="bg-white p-6 rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0 md:mr-6">
+                    <p class="text-sm font-medium text-gray-500">Overall Job Fit</p>
+                    <!-- Color-coded Score (REQUEST 7) -->
+                    <div id="overall-score-display" class="text-5xl font-extrabold transition-colors duration-300" data-rating="0">0</div>
+                    <p id="rating-status" class="text-xs font-semibold text-gray-400 mt-1">Not Rated</p>
+                </div>
+
+                <!-- Rating Slider (REQUEST 8: Starts at 0, no button needed) -->
+                <div class="w-full md:w-2/3 lg:w-1/2 space-y-3">
+                    <input type="range" id="overall-score-slider" min="0" max="10" value="0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-xs font-medium text-gray-500">
+                        <span>0 (Not Rated)</span>
+                        <span>10 (Perfect)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Job Description Area -->
+            <section class="bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Job Description</h2>
+                <!-- Context Menu Target (Request 9) -->
+                <div id="job-description-content" class="text-gray-700 leading-relaxed overflow-y-auto max-h-[60vh] relative">
+                    <p class="text-gray-400">Right-click on text to highlight sections after loading the job data...</p>
+                </div>
+            </section>
+
+            <!-- Notes and Highlights -->
+            <section class="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                <h2 class="text-2xl font-bold text-gray-800">Your Notes & Highlights</h2>
+
+                <!-- Highlights Display -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Saved Highlights</h3>
+                    <ul id="highlights-list" class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                        <li class="text-gray-400">No highlights saved yet. Right-click description text to add one.</li>
+                    </ul>
+                </div>
+
+                <!-- Notes Input -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Personal Notes</h3>
+                    <textarea id="notes-input" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Add detailed thoughts about this job..."></textarea>
+                </div>
+
+                <!-- Save Button -->
+                <button id="save-rating-button" class="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center" disabled>
+                    <i class="ph-fill ph-floppy-disk mr-2"></i> Save Rating and Skills
+                </button>
+            </section>
+        </div>
+    </main>
+
+    <!-- Custom Context Menu for Highlighting (REQUEST 9) -->
+    <div id="custom-context-menu" class="absolute bg-white rounded-lg shadow-xl border border-gray-100 p-1">
+        <button id="highlight-button" class="flex items-center space-x-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-md">
+            <i class="ph-bold ph-magic-wand text-lg"></i>
+            <span>Highlight Selection</span>
+        </button>
+    </div>
+
+    <!-- Message Box/Modal for alerts -->
+    <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full space-y-4">
+            <h3 id="message-title" class="text-lg font-bold text-gray-800">Alert</h3>
+            <p id="message-content" class="text-gray-600"></p>
+            <button onclick="document.getElementById('message-box').classList.add('hidden');" class="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Close</button>
+        </div>
+    </div>
+
+
+<script>
+    // --- MOCK API CONFIGURATION AND UTILITIES ---
+    // MOCK: Replace with actual Firebase/Firestore setup in a real environment
+    const MOCK_API_BASE = 'http://localhost:5000/api'; 
+    
+    // Default job ID for initial load (MUST be a valid ObjectId string from your MongoDB)
+    const MOCK_DEFAULT_JOB_ID = '6659c29806385a083236058e'; 
+
+    // Helper to show custom message box (instead of alert)
+    const showMessage = (title, message) => {
+        document.getElementById('message-title').textContent = title;
+        document.getElementById('message-content').textContent = message;
+        document.getElementById('message-box').classList.remove('hidden');
+    };
+
+    // --- STATE MANAGEMENT ---
+    let currentJobId = MOCK_DEFAULT_JOB_ID;
+    let jobData = {};
+    let ratedSkills = [];
+    let overallScore = 0;
+    let notes = '';
+    let highlights = [];
+    
+    // --- SKILL RATING MAP ---
+    const RATING_MAP = {
+        0: { label: 'Not Rated', color: 'text-gray-400', class: 'bg-gray-100' },
+        1: { label: 'Novice', color: 'text-red-600', class: 'bg-red-50' },
+        2: { label: 'Proficient', color: 'text-yellow-600', class: 'bg-yellow-50' },
+        3: { label: 'Expert', color: 'text-green-600', class: 'bg-green-50' },
+    };
+    
+    // --- OVERALL SCORE COLOR UTILITY (REQUEST 7) ---
+    const getOverallColor = (score) => {
+        if (score === 0) return 'text-gray-400';
+        if (score >= 1 && score <= 3) return 'text-red-600';
+        if (score >= 4 && score <= 6) return 'text-yellow-600';
+        if (score >= 7 && score <= 10) return 'text-green-600';
+        return 'text-gray-800';
+    };
+
+
+    // --- CONTEXT MENU IMPLEMENTATION (REQUEST 9: Highlight Fix) ---
+    const contextMenu = document.getElementById('custom-context-menu');
+    const descriptionContent = document.getElementById('job-description-content');
+
+    const hideContextMenu = () => {
+        contextMenu.style.display = 'none';
+    };
+
+    const showContextMenu = (x, y) => {
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+        contextMenu.style.display = 'block';
+    };
+
+    // 1. Context Menu Handler
+    descriptionContent.addEventListener('contextmenu', (e) => {
+        e.preventDefault(); // Prevent default browser context menu
+        
+        const selection = window.getSelection();
+        if (selection.toString().trim().length > 0) {
+            // Only show menu if text is selected
+            showContextMenu(e.clientX, e.clientY);
+        } else {
+            hideContextMenu();
+        }
+    });
+
+    // 2. Hide context menu when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!contextMenu.contains(e.target) && e.target !== descriptionContent) {
+            hideContextMenu();
+        }
+    });
+
+    // 3. Highlight button action
+    document.getElementById('highlight-button').addEventListener('click', () => {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+
+        if (selectedText) {
+            // Save the highlight to the state
+            highlights.push(selectedText);
+            renderHighlights();
+            
+            // Apply visual highlight to the description content
+            const range = selection.getRangeAt(0);
+            const span = document.createElement('span');
+            span.className = 'highlighted-text';
+            range.surroundContents(span);
+        }
+        hideContextMenu();
+    });
+
+
+    // --- DATA RENDERING FUNCTIONS ---
+
+    // Render Skill Counts (REQUEST 3)
+    const renderSkillCounts = () => {
+        const counts = { 'Expert': 0, 'Proficient': 0, 'Novice': 0, 'Not Rated': 0 };
+
+        ratedSkills.forEach(skill => {
+            const ratingLabel = RATING_MAP[skill.user_rating]?.label || 'Not Rated';
+            counts[ratingLabel] = (counts[ratingLabel] || 0) + 1;
+        });
+
+        const container = document.getElementById('skill-counts');
+        container.innerHTML = ''; // Clear existing counts
+
+        Object.entries(counts).forEach(([label, count]) => {
+            let color = 'bg-gray-100 text-gray-700';
+            if (label === 'Expert') color = 'bg-green-100 text-green-700';
+            else if (label === 'Proficient') color = 'bg-yellow-100 text-yellow-700';
+            else if (label === 'Novice') color = 'bg-red-100 text-red-700';
+            
+            container.innerHTML += `
+                <div class="p-3 ${color} rounded-lg flex flex-col">
+                    <span class="text-xl font-bold">${count}</span>
+                    <span class="text-xs font-medium">${label}</span>
+                </div>
+            `;
+        });
+    };
+    
+    // Render Skills List (REQUEST 2)
+    const renderSkills = () => {
+        const container = document.getElementById('skills-list');
+        container.innerHTML = ''; // Clear existing content
+
+        ratedSkills.forEach(skill => {
+            const currentRating = skill.user_rating || 0;
+            const ratingConfig = RATING_MAP[currentRating];
+            
+            // Build the select options
+            const optionsHtml = Object.entries(RATING_MAP).map(([value, config]) => 
+                `<option value="${value}" ${parseInt(value) === currentRating ? 'selected' : ''}>${config.label}</option>`
+            ).join('');
+
+            container.innerHTML += `
+                <div class="flex items-center justify-between text-sm p-2 rounded-lg ${ratingConfig.class}">
+                    <span class="font-medium text-gray-700 w-1/2 truncate">${skill.skill_name}</span>
+                    <select 
+                        data-skill-name="${skill.skill_name}" 
+                        onchange="handleSkillChange(this)"
+                        class="p-1 text-xs border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 ${ratingConfig.color} font-semibold w-2/5"
+                    >
+                        ${optionsHtml}
+                    </select>
+                </div>
+            `;
+        });
+        renderSkillCounts();
+    };
+
+    // Render Highlights
+    const renderHighlights = () => {
+        const container = document.getElementById('highlights-list');
+        if (highlights.length === 0) {
+            container.innerHTML = '<li class="text-gray-400">No highlights saved yet. Right-click description text to add one.</li>';
+            // Re-render description to remove old highlights
+            if (jobData.job_details?.description) {
+                descriptionContent.innerHTML = jobData.job_details.description;
+            }
+        } else {
+            container.innerHTML = highlights.map(h => 
+                `<li class="text-sm">
+                    <span class="font-semibold">${h}</span> 
+                    <button onclick="removeHighlight('${h.replace(/'/g, "\\'")}')" class="ml-2 text-red-500 hover:text-red-700 text-xs">
+                        <i class="ph-bold ph-x"></i>
+                    </button>
+                </li>`
+            ).join('');
+            // Apply visual highlights to the description content
+            applyVisualHighlights();
+        }
+    };
+    
+    // Apply visual highlights to the job description text
+    const applyVisualHighlights = () => {
+        let contentHtml = jobData.job_details.description;
+        
+        highlights.forEach(highlight => {
+            const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Use a regex to find and replace the text with the highlighted span
+            const regex = new RegExp(`(${escapedHighlight})`, 'g');
+            contentHtml = contentHtml.replace(regex, '<span class="highlighted-text">$1</span>');
+        });
+        descriptionContent.innerHTML = contentHtml;
+    };
+
+
+    // --- DATA HANDLING AND EVENT LISTENERS ---
+
+    // Handle change in skill rating
+    const handleSkillChange = (selectElement) => {
+        const skillName = selectElement.getAttribute('data-skill-name');
+        const newRating = parseInt(selectElement.value);
+
+        const skillIndex = ratedSkills.findIndex(s => s.skill_name === skillName);
+        if (skillIndex !== -1) {
+            ratedSkills[skillIndex].user_rating = newRating;
+        }
+
+        // Update the select element's color class based on the new rating
+        const config = RATING_MAP[newRating];
+        selectElement.className = selectElement.className.split(' ').filter(c => !c.startsWith('text-') && !c.startsWith('bg-')).join(' ');
+        selectElement.classList.add(config.color, config.class);
+
+        renderSkillCounts();
+    };
+
+    // Handle change in overall score slider
+    const handleOverallScoreChange = (slider) => {
+        overallScore = parseInt(slider.value);
+        const scoreDisplay = document.getElementById('overall-score-display');
+        const ratingStatus = document.getElementById('rating-status');
+
+        scoreDisplay.textContent = overallScore;
+        // Apply color based on score (REQUEST 7)
+        scoreDisplay.className = scoreDisplay.className.split(' ').filter(c => !c.startsWith('text-')).join(' ');
+        scoreDisplay.classList.add(getOverallColor(overallScore));
+
+        ratingStatus.textContent = overallScore === 0 ? 'Not Rated' : 'Rated';
+    };
+
+    // Remove a highlight
+    const removeHighlight = (textToRemove) => {
+        highlights = highlights.filter(h => h !== textToRemove);
+        renderHighlights();
+    };
+
+    // Update the main UI components with fetched data
+    const updateJobDetails = (data) => {
+        jobData = data;
+        
+        const details = data.job_details || {};
+        ratedSkills = data.skill_proficiencies || [];
+        overallScore = data.user_overall_score || 0; // REQUEST 8: Start at 0
+        notes = data.user_notes || '';
+        highlights = data.existing_highlights || [];
+
+        // 1. Fixed Header (REQUEST 1)
+        const headerDetails = document.getElementById('header-details');
+        headerDetails.textContent = 
+            `${details.title || 'N/A'} | ID: ${details.job_id || 'N/A'} | Location: ${details.location || 'N/A'}`;
+
+        // 2. Resume Match Score (REQUEST 4)
+        const resumeScore = (details.resume_match_score || 0) * 100;
+        document.getElementById('resume-match-score').textContent = `${resumeScore.toFixed(1)}%`;
+        
+        // 3. Semantic Score V2 (REQUEST 5)
+        const semanticScore = (details.semantic_score_v2 || 0) * 100;
+        document.getElementById('semantic-score-v2').textContent = `${semanticScore.toFixed(1)}%`;
+
+        // 4. Job Description
+        descriptionContent.innerHTML = details.description || '<p class="text-red-500">Job description not available.</p>';
+        applyVisualHighlights(); // Apply highlights to the new description
+
+        // 5. Overall Rating (REQUEST 7 & 8)
+        const scoreSlider = document.getElementById('overall-score-slider');
+        scoreSlider.value = overallScore;
+        handleOverallScoreChange(scoreSlider); // Initialize display and color
+
+        // 6. Notes
+        document.getElementById('notes-input').value = notes;
+
+        // 7. Skills List
+        renderSkills();
+
+        // 8. Highlights List
+        renderHighlights();
+        
+        document.getElementById('save-rating-button').disabled = false;
+        showMessage('Job Loaded', `Data for Job ID ${currentJobId} loaded successfully.`);
+    };
+
+    // --- API FUNCTIONS ---
+
+    // Fetch Job Details
+    const fetchJobDetails = async (jobId) => {
+        try {
+            const response = await fetch(`${MOCK_API_BASE}/job/${jobId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            updateJobDetails(data);
+        } catch (error) {
+            console.error('Error fetching job details:', error);
+            showMessage('Error', 'Could not load job details from the server.');
+        }
+    };
+
+    // Save Rating
+    const saveRating = async () => {
+        document.getElementById('save-rating-button').disabled = true;
+        
+        // Prepare the payload
+        const payload = {
+            job_id: currentJobId,
+            overall_score: overallScore,
+            notes: document.getElementById('notes-input').value,
+            highlights: highlights,
+            rated_skills: ratedSkills, // Send back the updated skills array
+            timestamp: new Date().toISOString()
+        };
+
+        try {
+            const response = await fetch(`${MOCK_API_BASE}/rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            showMessage('Success', result.message);
+        } catch (error) {
+            console.error('Error saving rating:', error);
+            showMessage('Error', 'Failed to save rating and skills to the backend.');
+        } finally {
+            document.getElementById('save-rating-button').disabled = false;
+        }
+    };
+
+
+    // --- INITIALIZATION ---
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial data load
+        fetchJobDetails(currentJobId);
+
+        // Attach event listeners
+        document.getElementById('overall-score-slider').addEventListener('input', (e) => handleOverallScoreChange(e.target));
+        document.getElementById('save-rating-button').addEventListener('click', saveRating);
+
+        // Initialize notes state from input
+        document.getElementById('notes-input').addEventListener('input', (e) => {
+            notes = e.target.value;
+        });
+
+        // Hide the context menu if the user scrolls
+        window.addEventListener('scroll', hideContextMenu);
+    });
+
+</script>
+</body>
+</html>
