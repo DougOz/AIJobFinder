@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>c7cc07d7-b383-458c-a3bb-e03267415145</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>sync_ratings_to_mongo.py</StartupFile>
+    <StartupFile>job_rater_server.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -30,6 +30,7 @@
     <Compile Include="dice_search_scraper.py" />
     <Compile Include="export_jobs_to_csv.py" />
     <Compile Include="file_utilities.py" />
+    <Compile Include="job_rater_server.py" />
     <Compile Include="load_jobs_to_mongodb.py" />
     <Compile Include="mongodb_functions.py" />
     <Compile Include="populate_firestore_skills.py" />
@@ -40,6 +41,7 @@
     <InterpreterReference Include="Global|VisualStudio|env1" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="JobRater.jsx" />
     <Content Include="SkillRater_Local_Runner.html" />
     <Content Include="user_skill_rater.jsx" />
   </ItemGroup>
