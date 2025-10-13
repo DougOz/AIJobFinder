@@ -5,92 +5,115 @@ const API_BASE = 'http://localhost:5000/api';
 
 // --- CONSTANTS ---
 const RATING_MAP = {
-    0: { label: 'Not Rated', color: 'text-gray-400', bg: 'bg-gray-100', text: 'Not Rated' },
-    1: { label: 'Novice', color: 'text-red-600', bg: 'bg-red-50', text: 'Novice' },
-    2: { label: 'Proficient', color: 'text-yellow-600', bg: 'bg-yellow-50', text: 'Proficient' },
-    3: { label: 'Expert', color: 'text-green-600', bg: 'bg-green-50', text: 'Expert' },
+    0: { label: 'Not Rated', textColor: '#6b7280', bgColor: '#f3f4f6', borderColor: '#d1d5db' },
+    1: { label: 'Novice', textColor: '#b91c1c', bgColor: '#f7d7d7', borderColor: '#fca5a5' },
+    2: { label: 'Proficient', textColor: '#a16207', bgColor: '#fef9c3', borderColor: '#facc15' },
+    3: { label: 'Expert', textColor: '#046828', bgColor: '#9EFFC0', borderColor: '#34d399' },
 };
+
+const TITLE_RATING_MAP = {
+    0: { label: 'N/R', color: '#6b7280', bgColor: '#f3f4f6' }, // Black/Gray
+    1: { label: '✗', color: '#dc2626', bgColor: '#fee2e2' },   // Red X
+    2: { label: '?', color: '#ca8a04', bgColor: '#fefce8' },   // Yellow ?
+    3: { label: '✓', color: '#059669', bgColor: '#ecfdf5' },   // Green Check
+};
+
 
 // --- UTILITIES ---
 
 const getOverallColor = (score) => {
-    if (score === 0) return 'color-gray-400';
-    if (score >= 1 && score <= 3) return 'color-red-600';
-    if (score >= 4 && score <= 6) return 'color-yellow-600';
-    if (score >= 7 && score <= 10) return 'color-green-600';
-    return 'color-gray-800';
+    if (score === 0) return { color: '#9ca3af' }; // Gray for Not Rated
+    const hue = (score - 1) * (120 / 9);
+    return { color: `hsl(${hue}, 100%, 35%)` };
 };
 
 const formatScoreAsPercent = (score) => {
     return `${((score || 0) * 100).toFixed(1)}%`;
 };
 
-const renderDescriptionWithHighlights = (description, highlights) => {
-    let contentHtml = description;
+const formatDescription = (text) => {
+    if (!text) return '<p>Job description not available.</p>';
+    let processedText = text;
+    const headingKeywords = [
+        'Job Number:', 'The Opportunity:', 'You Have:', 'Nice If You Have:', 'Clearance:', 'Compensation', 'Identity Statement', 'Work Model', 'Commitment to Non-Discrimination',
+        'Location:', 'Salary:', 'Description:', 'About the Role', 'Key Responsibilities', 'Minimum Qualifications', 'Work Flexibility', 'Contact:',
+        'Required Skills & Experience', 'Desired Skills & Experience', 'What You Will Be Doing', 'The Offer', 'Pay & Benefits',
+        'Overview', 'Responsibilities', 'Compensation and Benefits', 'Qualifications',
+        'Company Overview', 'Group/Division', 'Job Description/Preferred Qualifications',
+        'Job Description Summary', 'Job Description', 'Roles & Responsibilities', 'Desired Qualifications', 'Additional Information',
+        'Position:', 'Duration:', 'Job ID:', 'Job Overview:', 'Pay Range:', 'About PTR Global',
+        'Basic Qualifications', 'CLEARANCE REQUIREMENTS:', 'Responsibilities for this Position', 'What sets you apart:', 'Our Commitment to You:', 'Workplace Options:', 'Salary Note',
+        'Who You Are:', 'The Work:', 'What We\'re Doing:', 'Who We Are:', 'Why Join Us:', 'EEO', 'Other Important Information', 'Work Schedule Information', 'National Pay Statement', 'Premium Pay Statement',
+        'What’s in it for you:', 'What you get to do:', 'What you need to succeed:', 'Growth Opportunity', 'Work Arrangement', 'Visa Requirements',
+        'Primary Responsibilities:', 'Why Join Data Intelligence, LLC?', 'About Us:', 'Job Summary', 'DUTIES AND RESPONSIBILITIES:', 'REQUIRED EXPERIENCE:', 'JOB QUALIFICATIONS:', 'APPLY TO:', 'START DATE:',
+        'What you\'ll do', 'What experience you need', 'What could set you apart'
+    ];
+    const preHeadingRegex = new RegExp(`(${headingKeywords.join('|')})`, 'gi');
+    processedText = processedText.replace(preHeadingRegex, '\n\n$1');
+    processedText = processedText.replace(/([a-z\)\."])(?!NET|JS|VIEW|DB)([A-Z])/g, '$1\n$2');
+    processedText = processedText.replace(/([a-zA-Z])(\d+\+?\s*years)/g, '$1\n$2');
+    processedText = processedText.replace(/\s+([•*-])/g, '\n$1');
+    processedText = processedText.replace(/(\. )([A-Z"'`])/g, '$1\n$2');
+    const mainHeadingRegex = new RegExp(`^(${headingKeywords.join('|')}|Pay & Benefits|Benefits offered|Pay Rate|Combined Salary Range|Base Pay Range|Base Salary|Equity|Onsite Requirements|For U.S. based positions only|NOTE|Primary Location|Bonus Perks|Estimated Min Rate):?`, 'i');
+    const subHeadingRegex = /^(Required skills|Preferred but not required|Bonus:|Tech Breakdown|Daily Responsibilities|Desired skills|Ideal Experience|Desired Skills)/i;
+    const listItemRegex = /^\s*([•*-]|\d+\+?\s*years|Experience with|Proficiency in|Ability to|Solid experience|Strong knowledge|Strong understanding|Familiarity with|Hands-on|Bachelor's|Master's|Doctorate|Bonus based on|Paid time off|Medical Insurance|Dental Benefits|Vision Benefits|At least \d+ years)/i;
+    const lines = processedText.split('\n');
+    let html = '';
+    let inList = false;
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine === '' || trimmedLine.length < 2) continue;
+        if (mainHeadingRegex.test(trimmedLine)) {
+            if (inList) { html += '</ul>'; inList = false; }
+            html += `<h3>${trimmedLine}</h3>`;
+        } else if (subHeadingRegex.test(trimmedLine)) {
+            if (inList) { html += '</ul>'; inList = false; }
+            html += `<h4>${trimmedLine}</h4>`;
+        } else if (listItemRegex.test(trimmedLine)) {
+            if (!inList) { html += '<ul>'; inList = true; }
+            html += `<li>${trimmedLine.replace(/^[•*-]\s*/, '')}</li>`;
+        } else {
+            if (inList) { html += '</ul>'; inList = false; }
+            html += `<p>${trimmedLine}</p>`;
+        }
+    }
+    if (inList) { html += '</ul>'; }
+    html = html.replace(/<p>Employers have access/g, '</p><p class="footnote">Employers have access');
+    html = html.replace(/Report this job/g, '</p><p class="footnote">Report this job');
+    return html;
+};
 
-    if (!description) {
+
+const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
+    let contentHtml = descriptionHtml;
+    if (!contentHtml) {
         return { __html: '<p class="color-red-600">Job description not available.</p>' };
     }
-
     highlights.forEach(highlight => {
-        const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escapedHighlight})`, 'g');
-        contentHtml = contentHtml.replace(regex, '<span class="highlighted-text">$1</span>');
+        const escapedHighlight = highlight.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedHighlight})`, 'gi');
+        const highlightClass = highlight.type === 'like' ? 'highlighted-like' : 'highlighted-dislike';
+        contentHtml = contentHtml.replace(regex, `<span class="${highlightClass}">$1</span>`);
     });
-
     return { __html: contentHtml };
 };
 
-// --- ICON COMPONENTS (Simple SVG replacements) ---
 
-const ChartBarIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M4 22H2V11h2v11zM8 22H6V6h2v16zM12 22H10V2h2v20zM16 22H14V11h2v11zM20 22H18V6h2v16z" />
-    </svg>
-);
-
-const CheckSquareIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM9 16.17l-3.59-3.59L4 14l5 5L20 8l-1.41-1.41z" />
-    </svg>
-);
-
-const BookOpenIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M21 21v-8a2 2 0 00-2-2h-3V7a2 2 0 00-2-2H8a2 2 0 00-2 2v4H3a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2zM8 7h8v4H8V7z" />
-    </svg>
-);
-
-const FloppyDiskIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M19 2H5a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2zM8 17H6v-3h2v3zM18 7h-6V4h6v3z" />
-    </svg>
-);
-
-const MagicWandIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M20.5 2L22 3.5l-1.5 1.5-1.5-1.5L20.5 2zM15 4l-1.5 1.5L15 7l1.5-1.5L15 4zM16 16l-4 4-2.5-2.5L14 14l2-2 2.5 2.5-4 4-2.5-2.5-2.5 2.5-4-4L6.5 9.5l4-4 2.5 2.5L16 12l2.5-2.5L22 14z" />
-    </svg>
-);
-
-const ArrowLeftIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M10 19l-7-7 7-7v4h11v6H10v4z" />
-    </svg>
-);
-
-const ArrowRightIcon = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M14 5l7 7-7 7v-4H3v-6h11V5z" />
-    </svg>
-);
+// --- ICON COMPONENTS ---
+const ChartBarIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 22H2V11h2v11zM8 22H6V6h2v16zM12 22H10V2h2v20zM16 22H14V11h2v11zM20 22H18V6h2v16z" /></svg>);
+const CheckSquareIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM9 16.17l-3.59-3.59L4 14l5 5L20 8l-1.41-1.41z" /></svg>);
+const BookOpenIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 21v-8a2 2 0 00-2-2h-3V7a2 2 0 00-2-2H8a2 2 0 00-2 2v4H3a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2zM8 7h8v4H8V7z" /></svg>);
+const FloppyDiskIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 2H5a2 2 0 00-2 2v16a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2zM8 17H6v-3h2v3zM18 7h-6V4h6v3z" /></svg>);
+const LinkIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.586 13.414a1 1 0 01-1.414 1.414 5 5 0 01-7.07-7.071 1 1 0 011.414-1.414 3 3 0 004.242 4.242l1.414-1.414a1 1 0 011.414 1.414zm2.828-2.828a1 1 0 011.414-1.414 5 5 0 017.07 7.071 1 1 0 11-1.414 1.414 3 3 0 00-4.242-4.242l-1.414 1.414a1 1 0 01-1.414-1.414z" /></svg>);
+const ThumbUpIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7h-6.31l.95-4.57.03-.32a1.5 1.5 0 00-1.5-1.5L12 2l-1.36 6.36L9 12v9h9l1.34-6.68L21 7zM3 12h4v9H3z" /></svg>);
+const ThumbDownIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17h6.31l-.95 4.57-.03.32a1.5 1.5 0 001.5 1.5L12 22l1.36-6.36L15 12V3H6l-1.34 6.68L3 17zm18 0h-4V8h4v9z" /></svg>);
+const ArrowLeftIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 19l-7-7 7-7v4h11v6H10v4z" /></svg>);
+const ArrowRightIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 5l7 7-7 7v-4H3v-6h11V5z" /></svg>);
 
 // --- MAIN APPLICATION COMPONENT ---
 const App = () => {
-    // New states for dynamic job loading and navigation
     const [jobIds, setJobIds] = useState([]);
     const [currentJobIndex, setCurrentJobIndex] = useState(0);
-
     const [jobData, setJobData] = useState({});
     const [ratedSkills, setRatedSkills] = useState([]);
     const [overallScore, setOverallScore] = useState(0);
@@ -98,172 +121,133 @@ const App = () => {
     const [highlights, setHighlights] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [message, setMessage] = useState(null);
-
-    // Highlighting / Context Menu State
     const [contextMenuPos, setContextMenuPos] = useState(null);
     const contextMenuRef = useRef(null);
     const [currentSelection, setCurrentSelection] = useState('');
+    const [titleRatings, setTitleRatings] = useState({});
 
     const currentJobId = jobIds[currentJobIndex];
     const jobDetails = jobData.job_details || {};
 
-    // --- SKILL COUNT CALCULATION ---
     const calculateSkillCounts = () => {
         const counts = { 'Expert': 0, 'Proficient': 0, 'Novice': 0, 'Not Rated': 0 };
         ratedSkills.forEach(skill => {
-            const ratingLabel = RATING_MAP[skill.user_rating]?.text || 'Not Rated';
+            const ratingLabel = RATING_MAP[skill.user_rating]?.label || 'Not Rated';
             counts[ratingLabel] = (counts[ratingLabel] || 0) + 1;
         });
         return counts;
     };
     const skillCounts = calculateSkillCounts();
 
-    // --- API & DATA HANDLERS ---
+    const showMessage = (title, content) => { setMessage({ title, content }); };
 
-    const showMessage = (title, content) => {
-        setMessage({ title, content });
-    };
-
-    // 1. Fetch all job IDs (initial load)
     const fetchJobIds = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Assuming a new /jobs endpoint returns an array of job IDs
             const response = await fetch(`${API_BASE}/jobs`);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! Status: ${response.status} fetching job list. Message: ${errorText.substring(0, 100)}...`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             const ids = await response.json();
-
             if (ids && ids.length > 0) {
                 setJobIds(ids);
-                // Start loading the details for the first job (index 0)
                 setCurrentJobIndex(0);
             } else {
-                showMessage('Info', 'No jobs found in the database. Please ensure the backend is populated.');
+                showMessage('Info', 'No jobs found.');
                 setJobIds([]);
                 setIsLoading(false);
             }
         } catch (error) {
             console.error('Error fetching job IDs:', error);
-            showMessage('Error', `Could not load job list from the server. Ensure the backend is running and the /api/jobs route is correct. Error: ${error.message}`);
+            showMessage('Error', `Could not load job list. ${error.message}`);
             setIsLoading(false);
         }
     }, []);
 
-
-    // 2. Fetch details for the current job ID
     const fetchJobDetails = useCallback(async (jobIdToFetch) => {
         if (!jobIdToFetch) return;
-
-        // Reset data while loading new job details
-        setJobData({});
-        setRatedSkills([]);
-        setHighlights([]);
-        setNotes('');
-        setOverallScore(0);
+        setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0);
         setIsLoading(true);
-
         try {
             const response = await fetch(`${API_BASE}/job/${jobIdToFetch}`);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! Status: ${response.status}. Message: ${errorText.substring(0, 100)}...`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}.`);
             const data = await response.json();
-
             setJobData(data);
             setRatedSkills(data.skill_proficiencies || []);
             setOverallScore(data.user_overall_score || 0);
             setNotes(data.user_notes || '');
             setHighlights(data.existing_highlights || []);
-            //showMessage('Job Loaded', `Job ${currentJobIndex + 1} of ${jobIds.length} loaded successfully.`);
-
         } catch (error) {
             console.error('Error fetching job details:', error);
-            showMessage('Error', `Failed to load details for job ${jobIdToFetch}. Error: ${error.message}`);
+            showMessage('Error', `Failed to load details for job ${jobIdToFetch}. ${error.message}`);
         } finally {
             setIsLoading(false);
         }
-    }, [jobIds, currentJobIndex]); // Depends on jobIds and currentJobIndex for messaging and ID lookup
+    }, []);
 
-    // 3. Save the current rating
     const saveRating = async () => {
         if (isLoading || !currentJobId) return;
         setIsLoading(true);
-
         const payload = {
-            job_id: currentJobId, // Use the current job ID
-            overall_score: overallScore,
-            notes: notes,
-            highlights: highlights,
-            rated_skills: ratedSkills,
-            timestamp: new Date().toISOString()
+            job_id: currentJobId, overall_score: overallScore, notes: notes,
+            highlights: highlights, rated_skills: ratedSkills, timestamp: new Date().toISOString()
         };
-
         try {
             const response = await fetch(`${API_BASE}/rate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! Status: ${response.status}. Message: ${errorText.substring(0, 100)}...`);
-            }
-
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}.`);
             const result = await response.json();
             showMessage('Success', result.message);
         } catch (error) {
             console.error('Error saving rating:', error);
-            showMessage('Error', `Failed to save rating. Check console for details. Error: ${error.message}`);
+            showMessage('Error', `Failed to save rating. ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // --- NAVIGATION HANDLERS ---
+    const fetchTitleRatings = useCallback(async () => {
+        try {
+            const response = await fetch(`${API_BASE}/titles/ratings`);
+            if (!response.ok) throw new Error('Failed to fetch title ratings');
+            const data = await response.json();
+            setTitleRatings(data);
+        } catch (error) {
+            console.error("Error fetching title ratings:", error);
+            showMessage('Error', 'Could not load title ratings from the server.');
+        }
+    }, []);
 
-    const goToNextJob = () => {
-        if (currentJobIndex < jobIds.length - 1) {
-            setCurrentJobIndex(prev => prev + 1);
+    const saveTitleRating = async (title, rating) => {
+        try {
+            const response = await fetch(`${API_BASE}/titles/rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, rating }),
+            });
+            if (!response.ok) throw new Error('Failed to save title rating');
+            setTitleRatings(prev => ({ ...prev, [title]: rating }));
+        } catch (error) {
+            console.error("Error saving title rating:", error);
+            showMessage('Error', 'Failed to save title rating.');
         }
     };
 
-    const goToPrevJob = () => {
-        if (currentJobIndex > 0) {
-            setCurrentJobIndex(prev => prev - 1);
-        }
-    };
+    const goToNextJob = () => { if (currentJobIndex < jobIds.length - 1) setCurrentJobIndex(prev => prev + 1); };
+    const goToPrevJob = () => { if (currentJobIndex > 0) setCurrentJobIndex(prev => prev - 1); };
 
-    // --- EFFECTS ---
-
-    // Effect 1: Initial load of all job IDs
     useEffect(() => {
         fetchJobIds();
-    }, [fetchJobIds]);
+        fetchTitleRatings();
+    }, [fetchJobIds, fetchTitleRatings]);
 
-    // Effect 2: Load job details whenever the current ID changes
     useEffect(() => {
-        if (currentJobId) {
-            fetchJobDetails(currentJobId);
-        } else if (jobIds.length === 0 && !isLoading) {
-            // Only show 'No Jobs' if we've attempted to load and found none
-            showMessage('Notice', 'Job list is empty. Check backend connectivity and job data.');
-        }
+        if (currentJobId) fetchJobDetails(currentJobId);
+        else if (jobIds.length === 0 && !isLoading) showMessage('Notice', 'Job list is empty.');
     }, [currentJobId, fetchJobDetails]);
-
-
-    // --- CONTEXT MENU LOGIC (Omitted for brevity, kept in component) ---
 
     const handleContextMenu = useCallback((e) => {
         e.preventDefault();
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
+        const selectedText = window.getSelection().toString().trim();
         if (selectedText.length > 0) {
             setCurrentSelection(selectedText);
             setContextMenuPos({ x: e.clientX, y: e.clientY });
@@ -272,26 +256,18 @@ const App = () => {
         }
     }, []);
 
-    const handleHighlightAction = useCallback(() => {
+    const handleHighlightAction = useCallback((type) => {
         if (currentSelection) {
             setHighlights(prev => {
-                if (!prev.includes(currentSelection)) {
-                    return [...prev, currentSelection];
-                }
-                return prev;
+                const filtered = prev.filter(h => h.text !== currentSelection);
+                return [...filtered, { text: currentSelection, type }];
             });
         }
-        setContextMenuPos(null);
-        setCurrentSelection('');
+        setContextMenuPos(null); setCurrentSelection('');
     }, [currentSelection]);
 
-    // Effect to hide context menu on click outside
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
-                setContextMenuPos(null);
-            }
-        };
+        const handleClickOutside = (e) => { if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) setContextMenuPos(null); };
         const handleScroll = () => setContextMenuPos(null);
         document.addEventListener('mousedown', handleClickOutside);
         window.addEventListener('scroll', handleScroll);
@@ -301,92 +277,79 @@ const App = () => {
         };
     }, []);
 
-
-    // --- RENDERING COMPONENTS ---
-
-    const SkillsList = () => (
-        <div id="skills-list" className="space-y-2">
-            {ratedSkills.length > 0 ? ratedSkills.map(skill => {
-                const currentRating = skill.user_rating || 0;
-                const ratingConfig = RATING_MAP[currentRating];
-
-                const optionsHtml = Object.entries(RATING_MAP).map(([value, config]) =>
-                    <option key={value} value={value}>{config.label}</option>
-                );
-
-                return (
-                    <div key={skill.skill_name} className={`skill-row flex items-center justify-between text-sm p-2 rounded-lg ${ratingConfig.bg}`}>
-                        <span className="font-medium color-gray-700 w-1/2 truncate">{skill.skill_name}</span>
-                        <select
-                            value={currentRating}
-                            onChange={(e) => handleSkillChange(e, skill.skill_name)}
-                            className={`skill-select p-1 text-xs border border-gray-300 rounded-lg focus-outline ${ratingConfig.color} font-semibold w-2/5 appearance-none cursor-pointer`}
-                            style={{ borderColor: 'var(--color-gray-300)' }}
-                        >
-                            {optionsHtml}
-                        </select>
-                    </div>
-                );
-            }) : <p className="text-sm color-gray-400">No skills listed for this job.</p>}
-        </div>
-    );
-
-    const SkillCountsSummary = () => (
-        <div id="skill-counts" className="skill-counts-grid gap-3 text-center">
-            {Object.entries(skillCounts).map(([label, count]) => {
-                let color = 'bg-gray-100 color-gray-700';
-                if (label === 'Expert') color = 'bg-green-100 color-green-700';
-                else if (label === 'Proficient') color = 'bg-yellow-100 color-yellow-700';
-                else if (label === 'Novice') color = 'bg-red-100 color-red-700';
-
-                return (
-                    <div key={label} className={`p-3 card-shadow-sm rounded-xl flex flex-col ${color}`}>
-                        <span className="text-xl font-bold">{count}</span>
-                        <span className="text-xs font-medium">{label}</span>
-                    </div>
-                );
-            })}
-        </div>
-    );
-
-    const HighlightsList = () => (
-        <ul id="highlights-list" className="list-disc list-inside space-y-1 text-sm color-gray-600">
-            {highlights.length === 0 ? (
-                <li className="color-gray-400 list-none">No highlights saved yet. Right-click description text to add one.</li>
-            ) : (
-                highlights.map((h, index) => (
-                    <li key={index} className="flex items-start justify-between">
-                        <span className="font-semibold mr-2">{h}</span>
-                        <button onClick={() => removeHighlight(h)} className="color-red-600 hover:color-red-800 text-xs flex-shrink-0 delete-btn" title="Remove Highlight">
-                            🗑️
-                        </button>
-                    </li>
-                ))
-            )}
-        </ul>
-    );
-
-    const handleOverallScoreChange = (e) => {
-        setOverallScore(parseInt(e.target.value));
-    };
-
+    const handleOverallScoreChange = (e) => { setOverallScore(parseInt(e.target.value)); };
     const handleSkillChange = (e, skillName) => {
         const newRating = parseInt(e.target.value);
-        setRatedSkills(prevSkills =>
-            prevSkills.map(s =>
-                s.skill_name === skillName ? { ...s, user_rating: newRating } : s
-            )
-        );
+        setRatedSkills(prev => prev.map(s => s.skill_name === skillName ? { ...s, user_rating: newRating } : s));
     };
-
     const removeHighlight = useCallback((textToRemove) => {
-        setHighlights(prevHighlights => prevHighlights.filter(h => h !== textToRemove));
+        setHighlights(prev => prev.filter(h => h.text !== textToRemove));
     }, []);
 
     const isFirstJob = currentJobIndex === 0;
     const isLastJob = currentJobIndex === jobIds.length - 1;
     const totalJobs = jobIds.length;
 
+    const SkillsList = () => (
+        <div id="skills-list" className="space-y-2">
+            {ratedSkills.length > 0 ? [...ratedSkills]
+                .sort((a, b) => {
+                    const ratingA = a.user_rating || 0;
+                    const ratingB = b.user_rating || 0;
+                    return ratingA - ratingB;
+                })
+                .map(skill => {
+                    const ratingConfig = RATING_MAP[skill.user_rating || 0];
+                    const skillRowStyle = { backgroundColor: ratingConfig.bgColor, borderColor: ratingConfig.borderColor };
+                    const selectStyle = { color: ratingConfig.textColor, borderColor: ratingConfig.borderColor };
+                    return (
+                        <div key={skill.skill_name} className="skill-row flex items-center justify-between text-sm p-2 rounded-lg border" style={skillRowStyle}>
+                            <span className="font-medium color-gray-700 w-1/2 truncate">{skill.skill_name}</span>
+                            <select
+                                value={skill.user_rating || 0}
+                                onChange={(e) => handleSkillChange(e, skill.skill_name)}
+                                className="skill-select py-1 px-2 text-xs border rounded-lg focus-outline font-semibold w-2/5 appearance-none cursor-pointer"
+                                style={selectStyle}
+                            >
+                                {Object.entries(RATING_MAP).map(([val, conf]) => <option key={val} value={val}>{conf.label}</option>)}
+                            </select>
+                        </div>
+                    );
+                }) : <p className="text-sm color-gray-400">No skills listed.</p>}
+        </div>
+    );
+    const SkillCountsSummary = () => {
+        const orderedSkillLevels = [
+            { label: 'Expert', config: RATING_MAP[3] },
+            { label: 'Proficient', config: RATING_MAP[2] },
+            { label: 'Novice', config: RATING_MAP[1] },
+            { label: 'Not Rated', config: RATING_MAP[0] },
+        ];
+
+        return (
+            <div id="skill-counts" className="space-y-3">
+                {orderedSkillLevels.map(({ label, config }) => {
+                    const count = skillCounts[label] || 0;
+                    return (
+                        <div key={label} className="p-3 card-shadow-sm rounded-xl flex items-center" style={{ backgroundColor: config.bgColor }}>
+                            <span className="text-2xl font-bold mr-2 w-8 text-right" style={{ color: config.textColor }}>{count}</span>
+                            <span className="text-sm font-semibold" style={{ color: config.textColor }}>{label}</span>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+    const HighlightsList = () => (
+        <ul id="highlights-list" className="list-disc list-inside space-y-1 text-sm color-gray-600">
+            {highlights.length === 0 ? <li className="color-gray-400 list-none">No highlights saved.</li> : highlights.map((h, i) => (
+                <li key={i} className="flex items-start justify-between">
+                    <span className="font-semibold mr-2 flex items-center"><span className={`w-2 h-2 rounded-full mr-2 ${h.type === 'like' ? 'bg-green-500' : 'bg-red-500'}`}></span>{h.text}</span>
+                    <button onClick={() => removeHighlight(h.text)} className="color-red-600 hover:color-red-800 text-xs flex-shrink-0 delete-btn" title="Remove">🗑️</button>
+                </li>
+            ))}
+        </ul>
+    );
 
     return (
         <div className="min-h-screen">
@@ -394,356 +357,162 @@ const App = () => {
                 /* --- BASE & TYPOGRAPHY --- */
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
                 :root {
-                    --color-indigo: #4f46e5;
-                    --color-indigo-hover: #4338ca;
-                    --color-gray-800: #1f2937;
-                    --color-gray-700: #374151;
-                    --color-gray-600: #4b5563;
-                    --color-gray-500: #6b7280;
-                    --color-gray-400: #9ca3af;
-                    --color-gray-300: #d1d5db;
-                    --color-gray-200: #e5e7eb;
-                    --color-red-600: #dc2626;
-                    --color-red-50: #fef2f2;
-                    --color-red-800: #991b1b;
-                    --color-yellow-600: #ca8a04;
-                    --color-yellow-50: #fefce8;
-                    --color-green-600: #059669;
-                    --color-green-50: #ecfdf5;
-                    --color-orange-500: #f97316;
+                    --color-indigo: #4f46e5; --color-indigo-hover: #4338ca; --color-gray-800: #1f2937;
+                    --color-gray-700: #374151; --color-gray-600: #4b5563; --color-gray-500: #6b7280;
+                    --color-gray-400: #9ca3af; --color-gray-300: #d1d5db; --color-gray-200: #e5e7eb;
+                    --color-red-600: #dc2626; --color-red-800: #991b1b;
+                    --color-yellow-600: #ca8a04; --color-green-600: #059669; --color-orange-500: #f97316;
                 }
-
-                body { 
-                    font-family: 'Inter', sans-serif; 
-                    background-color: #f7f7f9; 
-                    margin: 0;
-                }
+                body { font-family: 'Inter', sans-serif; background-color: #f7f7f9; margin: 0; }
                 
-                /* --- UTILITY CLASSES REPLACEMENT --- */
+                /* --- UTILITIES --- */
+                .bg-white { background-color: #fff; } .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+                .rounded-xl { border-radius: 0.75rem; } .rounded-lg { border-radius: 0.5rem; } .min-h-screen { min-height: 100vh; }
+                .sticky { position: sticky; } .top-0 { top: 0; } .z-50 { z-index: 50; } .p-6 { padding: 1.5rem; } .p-5 { padding: 1.25rem; } .p-3 { padding: 0.75rem; }
+                .p-2 { padding: 0.5rem; } .pt-4 { padding-top: 1rem; } .mt-1 { margin-top: 0.25rem; } .mt-2 { margin-top: 0.5rem; }
+                .mr-2 { margin-right: 0.5rem; } .mr-4 { margin-right: 1rem; } .ml-4 { margin-left: 1rem; } .mx-2 { margin-left: 0.5rem; margin-right: 0.5rem; }
+                .mx-4 { margin-left: 1rem; margin-right: 1rem; } .space-y-6 > * + * { margin-top: 1.5rem; } .space-y-2 > * + * { margin-top: 0.5rem; }
+                .flex { display: flex; } .flex-col { flex-direction: column; } .items-center { align-items: center; } .justify-between { justify-content: space-between; }
+                .flex-shrink-0 { flex-shrink: 0; } .flex-grow { flex-grow: 1; } .w-full { width: 100%; } .self-center { align-self: center; }
+                .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+                .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+                .border-none { border: none; }
+                
+                /* Description Formatting */
+                .job-description-content h3 { font-size: 1.25rem; font-weight: 700; color: var(--color-gray-800); margin-top: 1.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-gray-200); padding-bottom: 0.5rem; }
+                .job-description-content h4 { font-size: 1.1rem; font-weight: 600; color: var(--color-gray-700); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+                .job-description-content p { margin-bottom: 1rem; }
+                .job-description-content ul { list-style: disc; padding-left: 20px; margin-bottom: 1rem; }
+                .job-description-content li { margin-bottom: 0.5rem; padding-left: 0.5rem; }
+                .job-description-content .footnote { font-size: 0.75rem; color: var(--color-gray-500); margin-top: 1.5rem; }
 
-                .bg-white { background-color: #fff; }
-                .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-                .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
-                .card-shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-                .rounded-xl { border-radius: 0.75rem; }
-                .rounded-lg { border-radius: 0.5rem; }
-                .rounded-md { border-radius: 0.375rem; }
-                .min-h-screen { min-height: 100vh; }
-                .sticky { position: sticky; }
-                .top-0 { top: 0; }
-                .z-50 { z-index: 50; }
-
-                /* Spacing */
-                .p-6 { padding: 1.5rem; } .p-5 { padding: 1.25rem; } .p-3 { padding: 0.75rem; }
-                .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; } .p-1 { padding: 0.25rem; }
-                .pt-4 { padding-top: 1rem; } .mb-4 { margin-bottom: 1rem; }
-                .mt-1 { margin-top: 0.25rem; } .mr-2 { margin-right: 0.5rem; } .mr-6 { margin-right: 1.5rem; }
-                .px-4 { padding-left: 1rem; padding-right: 1rem; }
-
-                .space-y-6 > * + * { margin-top: 1.5rem; }
-                .space-y-4 > * + * { margin-top: 1rem; }
-                .space-y-3 > * + * { margin-top: 0.75rem; }
-                .space-y-2 > * + * { margin-top: 0.5rem; }
-                .gap-6 { gap: 1.5rem; } .gap-3 { gap: 0.75rem; }
-
-                /* Layout */
-                .flex { display: flex; } .flex-col { flex-direction: column; }
-                .items-center { align-items: center; } .items-start { align-items: flex-start; }
-                .justify-between { justify-content: space-between; } .justify-center { justify-content: center; }
-                .flex-shrink-0 { flex-shrink: 0; } .w-full { width: 100%; }
-                .w-1\/2 { width: 50%; } .w-2\/5 { width: 40%; }
-                .skill-counts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                .job-description-content { max-height: 60vh; overflow-y: auto; }
-                .fixed { position: fixed; }
-                .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+                .fixed { position: fixed; } .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
                 .bg-black { background-color: rgba(0, 0, 0, 0.5); }
-                .flex-grow { flex-grow: 1; }
-
-                /* Colors (Foreground) */
                 .color-gray-800 { color: var(--color-gray-800); } .color-gray-700 { color: var(--color-gray-700); }
-                .color-gray-600 { color: var(--color-gray-600); } .color-gray-500 { color: var(--color-gray-500); }
-                .color-gray-400 { color: var(--color-gray-400); } .color-red-600 { color: var(--color-red-600); }
-                .hover\:color-red-800:hover { color: var(--color-red-800); } .color-yellow-600 { color: var(--color-yellow-600); }
-                .color-green-600 { color: var(--color-green-600); } .color-indigo-600 { color: var(--color-indigo); }
-                .text-white { color: white; }
-                .text-indigo-500 { color: var(--color-indigo); }
-                .text-green-500 { color: #10b981; } 
-                .text-orange-500 { color: var(--color-orange-500); }
-                .icon-base { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; }
-                .icon-nav { width: 1rem; height: 1rem; }
-                
-                /* Colors (Background) */
-                .bg-indigo-600 { background-color: var(--color-indigo); }
-                .hover\:bg-indigo-700:hover { background-color: var(--color-indigo-hover); }
-                .bg-gray-50 { background-color: #f9fafb; } .bg-gray-100 { background-color: #f3f4f6; }
-                .bg-red-50 { background-color: var(--color-red-50); } .bg-yellow-50 { background-color: var(--color-yellow-50); }
-                .bg-green-50 { background-color: var(--color-green-50); }
-                .bg-green-100 { background-color: #dcfce7; } .bg-yellow-100 { background-color: #fef9c3; }
-                .bg-red-100 { background-color: #fee2e2; }
-                .disabled\:bg-indigo-400:disabled { background-color: #818cf8; cursor: not-allowed; }
-
-                /* Text & Fonts */
-                .text-xl { font-size: 1.25rem; } .text-2xl { font-size: 1.5rem; }
-                .text-5xl { font-size: 3rem; line-height: 1; } .text-lg { font-size: 1.125rem; }
-                .text-base { font-size: 1rem; } .text-sm { font-size: 0.875rem; } .text-xs { font-size: 0.75rem; }
-                .font-bold { font-weight: 700; } .font-extrabold { font-weight: 800; }
-                .font-semibold { font-weight: 600; } .font-medium { font-weight: 500; }
+                .color-gray-500 { color: var(--color-gray-500); } .color-gray-400 { color: var(--color-gray-400); }
+                .color-indigo-600 { color: var(--color-indigo); } .text-white { color: white; }
+                .icon-base { width: 1.25rem; height: 1.25rem; } .icon-nav { width: 1rem; height: 1rem; } .icon-xs { width: 0.75rem; height: 0.75rem; }
+                .bg-indigo-600 { background-color: var(--color-indigo); } .hover\\:bg-indigo-700:hover { background-color: var(--color-indigo-hover); }
+                .bg-green-500 { background-color: #22c55e; } .bg-red-500 { background-color: #ef4444; }
+                .disabled\\:bg-indigo-400:disabled { background-color: #818cf8; cursor: not-allowed; opacity: 0.7; }
+                .text-xl { font-size: 1.25rem; } .text-sm { font-size: 0.875rem; } .text-xs { font-size: 0.75rem; } .text-2xl { font-size: 1.5rem; } .text-5xl { font-size: 3rem; line-height: 1; }
+                .font-bold { font-weight: 700; } .font-semibold { font-weight: 600; } .font-extrabold { font-weight: 800; }
                 .leading-relaxed { line-height: 1.625; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                .whitespace-pre-wrap { white-space: pre-wrap; }
-                .list-disc { list-style-type: disc; } .list-inside { list-style-position: inside; } .list-none { list-style-type: none; }
-
-                /* Form Controls */
-                .border { border-width: 1px; border-style: solid; } .border-gray-300 { border-color: var(--color-gray-300); }
-                .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); border-color: var(--color-indigo); }
-                .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; } .cursor-text { cursor: text; }
-
-                /* Custom Slider Style */
-                input[type=range].w-full::-webkit-slider-thumb {
-                    -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
-                    background: var(--color-indigo); cursor: pointer; margin-top: -6px;
-                }
-                input[type=range].w-full::-moz-range-thumb {
-                    height: 16px; width: 16px; border-radius: 50%;
-                    background: var(--color-indigo); cursor: pointer;
-                }
-                .h-2 { height: 0.5rem; } .bg-gray-200 { background-color: var(--color-gray-200); }
-
-                /* Custom Highlighting */
-                .highlighted-text {
-                    background-color: rgba(255, 235, 59, 0.5); 
-                    border-radius: 4px; padding: 1px 3px; display: inline;
-                }
-
-                /* Context Menu */
-                #custom-context-menu {
-                    position: fixed; background-color: white; border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px;
-                }
-                #custom-context-menu button {
-                    display: flex; align-items: center; width: 100%; padding: 8px; border-radius: 6px;
-                    transition: background-color 0.15s, color 0.15s;
-                }
-                #custom-context-menu button:hover {
-                    background-color: #eef2ff; color: var(--color-indigo);
-                }
-
-                /* Responsive Grid */
-                .main-grid {
-                    display: grid; grid-template-columns: 1fr; gap: 1.5rem;
-                    padding-bottom: 3rem; /* Extra space for mobile view */
-                }
-                @media (min-width: 1024px) { 
-                    .main-grid {
-                        grid-template-columns: 280px 1fr;
-                        padding-bottom: 1.5rem;
-                    }
-                }
-                .delete-btn { opacity: 0.7; transition: opacity 0.2s; }
-                .delete-btn:hover { opacity: 1; }
+                .border { border-width: 1px; border-style: solid; }
+                .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
+                .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; }
+                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(239, 68, 68, 0.3); }
+                #custom-context-menu { position: fixed; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px; }
+                #custom-context-menu button { display: flex; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: 6px; }
+                #custom-context-menu button:hover { background-color: #eef2ff; }
+                .main-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+                @media (min-width: 1024px) { .main-grid { grid-template-columns: 280px 1fr; } }
+                .delete-btn { opacity: 0.7; } .delete-btn:hover { opacity: 1; }
+                input[type=range].header-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 1rem; width: 1rem; border-radius: 50%; background: var(--color-indigo); cursor: pointer; margin-top: -3px; }
             `}</style>
 
-            {/* 1. FIXED HEADER */}
             <header className="sticky top-0 bg-white shadow-lg p-3 z-50">
                 <div className="flex items-center justify-between">
-                    <div className="flex-grow min-w-0">
-                        <h1 className="text-xl font-bold color-gray-800 truncate">
-                            Job Rater Pro: {jobDetails.title || (isLoading ? 'Loading Job...' : 'No Job Loaded')}
-                        </h1>
-                        <p className="text-sm color-gray-500 mt-1 truncate">
-                            ID: {currentJobId || 'N/A'} | Location: {jobDetails.location || 'N/A'}
-                        </p>
+                    <div className="flex items-center flex-grow min-w-0" style={{ flexBasis: '50%' }}>
+                        {jobDetails.title && (
+                            <select
+                                value={titleRatings[jobDetails.title] || 0}
+                                onChange={(e) => saveTitleRating(jobDetails.title, parseInt(e.target.value))}
+                                className="p-2 text-xl border-none rounded-lg focus-outline font-bold appearance-none cursor-pointer mr-4"
+                                style={{
+                                    color: TITLE_RATING_MAP[titleRatings[jobDetails.title] || 0].color,
+                                    backgroundColor: TITLE_RATING_MAP[titleRatings[jobDetails.title] || 0].bgColor,
+                                    width: '65px',
+                                    textAlign: 'center'
+                                }}
+                            >
+                                {Object.entries(TITLE_RATING_MAP).map(([value, config]) =>
+                                    <option key={value} value={value} style={{ color: config.color, backgroundColor: 'white', fontWeight: 'bold' }}>{config.label}</option>
+                                )}
+                            </select>
+                        )}
+                        <div>
+                            <h1 className="text-xl font-bold color-gray-800 truncate">{jobDetails.title || 'Loading...'}</h1>
+                            <div className="flex items-center text-sm color-gray-500 mt-1 truncate">
+                                <span>{jobDetails.company || 'N/A'}</span>
+                                {jobDetails.url && (
+                                    <><span className="mx-2">|</span><a href={jobDetails.url} target="_blank" rel="noopener noreferrer" className="flex items-center color-indigo-600 hover:underline"><LinkIcon className="icon-xs mr-2" /> View Listing</a></>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Job Navigation Controls */}
-                    <div className="flex items-center ml-4 flex-shrink-0">
-                        <span className="text-sm font-medium color-gray-600 mr-3 hidden md:inline">
-                            Job {totalJobs > 0 ? currentJobIndex + 1 : 0} of {totalJobs}
-                        </span>
+                    <div className="flex items-center justify-center flex-grow mx-4">
+                        <div className="flex flex-col items-center">
+                            <div className="text-5xl font-extrabold" style={getOverallColor(overallScore)}>{overallScore}</div>
+                            <p className="text-xs font-semibold color-gray-400 mt-1">Job Fit</p>
+                            <input type="range" min="0" max="10" value={overallScore} onChange={handleOverallScoreChange} className="w-full header-slider h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2" style={{ maxWidth: '150px' }} />
+                        </div>
+                        <button onClick={saveRating} disabled={isLoading || !currentJobId} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 ml-4 flex-shrink-0 self-center" title="Save Rating">
+                            <FloppyDiskIcon className="icon-nav" />
+                        </button>
+                    </div>
 
-                        <button
-                            onClick={goToPrevJob}
-                            disabled={isFirstJob || totalJobs === 0 || isLoading}
-                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 mr-2"
-                            title="Previous Job"
-                        >
-                            <ArrowLeftIcon className="icon-nav" style={{ color: 'white' }} />
-                        </button>
-                        <button
-                            onClick={goToNextJob}
-                            disabled={isLastJob || totalJobs === 0 || isLoading}
-                            className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400"
-                            title="Next Job"
-                        >
-                            <ArrowRightIcon className="icon-nav" style={{ color: 'white' }} />
-                        </button>
+                    <div className="flex items-center flex-shrink-0">
+                        <span className="text-sm font-medium color-gray-600 mr-4 hidden md:inline">Job {totalJobs > 0 ? currentJobIndex + 1 : 0} of {totalJobs}</span>
+                        <button onClick={goToPrevJob} disabled={isFirstJob || isLoading} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 mr-2" title="Previous Job"><ArrowLeftIcon className="icon-nav" /></button>
+                        <button onClick={goToNextJob} disabled={isLastJob || isLoading} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400" title="Next Job"><ArrowRightIcon className="icon-nav" /></button>
                     </div>
                 </div>
             </header>
 
-            {/* MAIN CONTENT GRID */}
             <main className="main-grid p-6 pt-4">
-
-                {/* LEFT COLUMN: Scores and Skills */}
                 <div id="left-sidebar" className="space-y-6">
-
-                    {/* Overall Match & Scores */}
                     <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center">
-                            <ChartBarIcon className="icon-base text-indigo-500" /> Match Scores
-                        </h2>
-
-                        <div className="space-y-3">
-                            {/* Resume Match Score */}
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <span className="text-sm font-medium color-gray-600">Resume Match</span>
-                                <span className="text-base font-bold color-indigo-600">
-                                    {formatScoreAsPercent(jobDetails.resume_score)}
-                                </span>
-                            </div>
-
-                            {/* Semantic Score V2 */}
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <span className="text-sm font-medium color-gray-600">Semantic Score V2</span>
-                                <span className="text-base font-bold color-indigo-600">
-                                    {formatScoreAsPercent(jobDetails.semantic_score_v2)}
-                                </span>
-                            </div>
+                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><ChartBarIcon className="icon-base mr-2 text-indigo-500" /> Match Scores</h2>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Resume Match</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.resume_score)}</span></div>
+                            <div className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Semantic Score V2</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.semantic_score_v2)}</span></div>
                         </div>
                     </section>
-
-                    {/* Skill Proficiency Summary */}
                     <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center">
-                            <CheckSquareIcon className="icon-base text-green-500" /> Skill Status
-                        </h2>
+                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><CheckSquareIcon className="icon-base mr-2 text-green-500" /> Skill Status</h2>
                         <SkillCountsSummary />
                     </section>
-
-                    {/* Skills Proficiency List */}
                     <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center">
-                            <BookOpenIcon className="icon-base text-orange-500" /> Required Skills
-                        </h2>
-                        {isLoading ? <p className="text-sm color-gray-400">Loading skills...</p> : <SkillsList />}
+                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><BookOpenIcon className="icon-base mr-2 text-orange-500" /> Skills</h2>
+                        {isLoading ? <p className="text-sm color-gray-400">Loading...</p> : <SkillsList />}
                     </section>
                 </div>
-
-                {/* RIGHT COLUMN: Job Description, Rating, Notes */}
                 <div id="right-content" className="space-y-6">
-
-                    {/* Overall Rating & Action */}
-                    <section className="bg-white p-6 rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center">
-                        <div className="mb-4 md:mb-0 md:mr-6">
-                            <p className="text-sm font-medium color-gray-500">Overall Job Fit</p>
-                            {/* Color-coded Score */}
-                            <div className={`text-5xl font-extrabold transition-colors duration-300 ${getOverallColor(overallScore)}`}>
-                                {overallScore}
-                            </div>
-                            <p className="text-xs font-semibold color-gray-400 mt-1">
-                                {overallScore === 0 ? 'Not Rated' : 'Rated'}
-                            </p>
-                        </div>
-
-                        {/* Rating Slider */}
-                        <div className="w-full space-y-3">
-                            <input
-                                type="range"
-                                id="overall-score-slider"
-                                min="0"
-                                max="10"
-                                value={overallScore}
-                                onChange={handleOverallScoreChange}
-                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="flex justify-between text-xs font-medium color-gray-500">
-                                <span>0 (Not Rated)</span>
-                                <span>10 (Perfect)</span>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Job Description Area */}
                     <section className="bg-white p-6 rounded-xl shadow-lg">
                         <h2 className="text-2xl font-bold color-gray-800 mb-4">Job Description</h2>
-                        {isLoading ? (
-                            <div className="color-gray-400">Loading job description...</div>
-                        ) : (
+                        {isLoading ? <div className="color-gray-400">Loading...</div> : (
                             <div
                                 id="job-description-content"
-                                className="color-gray-700 leading-relaxed overflow-y-auto job-description-content relative cursor-text"
+                                className="color-gray-700 leading-relaxed"
                                 onContextMenu={handleContextMenu}
-                                dangerouslySetInnerHTML={renderDescriptionWithHighlights(jobDetails.description, highlights)}
+                                dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)}
                             />
                         )}
                     </section>
-
-                    {/* Notes and Highlights */}
                     <section className="bg-white p-6 rounded-xl shadow-lg space-y-6">
                         <h2 className="text-2xl font-bold color-gray-800">Your Notes & Highlights</h2>
-
-                        {/* Highlights Display */}
-                        <div>
-                            <h3 className="text-lg font-semibold color-gray-700 mb-2">Saved Highlights</h3>
-                            <HighlightsList />
-                        </div>
-
-                        {/* Notes Input */}
-                        <div>
-                            <h3 className="text-lg font-lg font-semibold color-gray-700 mb-2">Personal Notes</h3>
-                            <textarea
-                                id="notes-input"
-                                rows="4"
-                                className="w-full p-3 border border-gray-300 rounded-lg focus-outline"
-                                placeholder="Add detailed thoughts about this job..."
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                style={{ borderColor: 'var(--color-gray-300)' }}
-                            />
-                        </div>
-
-                        {/* Save Button */}
-                        <button
-                            onClick={saveRating}
-                            className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg flex items-center justify-center disabled:bg-indigo-400"
-                            disabled={isLoading || !currentJobId}
-                        >
-                            <FloppyDiskIcon className="icon-base mr-2" style={{ color: 'white' }} />
-                            {isLoading ? 'Saving...' : 'Save Rating and Skills'}
-                        </button>
+                        <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Saved Highlights</h3><HighlightsList /></div>
+                        <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Personal Notes</h3><textarea id="notes-input" rows="4" className="w-full p-3 border border-gray-300 rounded-lg focus-outline" placeholder="Add thoughts..." value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+                        <button onClick={saveRating} className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg flex items-center justify-center disabled:bg-indigo-400" disabled={isLoading || !currentJobId}><FloppyDiskIcon className="icon-base mr-2" />{isLoading ? 'Saving...' : 'Save Rating and Skills'}</button>
                     </section>
                 </div>
             </main>
 
-            {/* Custom Context Menu for Highlighting */}
             {contextMenuPos && (
-                <div
-                    ref={contextMenuRef}
-                    id="custom-context-menu"
-                    style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-                >
-                    <button
-                        onClick={handleHighlightAction}
-                    >
-                        <MagicWandIcon className="icon-base" />
-                        <span>Highlight Selection</span>
-                    </button>
+                <div ref={contextMenuRef} id="custom-context-menu" style={{ left: contextMenuPos.x, top: contextMenuPos.y }}>
+                    <button onClick={() => handleHighlightAction('like')} className="color-green-700"><ThumbUpIcon className="icon-base mr-2" /><span>Like (Green)</span></button>
+                    <button onClick={() => handleHighlightAction('dislike')} className="color-red-700"><ThumbDownIcon className="icon-base mr-2" /><span>Dislike (Red)</span></button>
                 </div>
             )}
 
-            {/* Message Box/Modal for alerts */}
             {message && (
                 <div className="fixed inset-0 bg-black flex items-center justify-center z-[100]">
                     <div className="bg-white p-6 rounded-xl shadow-2xl space-y-4" style={{ maxWidth: '400px', width: '90%' }}>
-                        <h3 className={`text-lg font-bold ${message.title === 'Error' ? 'color-red-600' : 'color-gray-800'}`}>
-                            {message.title}
-                        </h3>
+                        <h3 className={`text-lg font-bold ${message.title === 'Error' ? 'color-red-600' : 'color-gray-800'}`}>{message.title}</h3>
                         <p className="color-gray-600 whitespace-pre-wrap">{message.content}</p>
-                        <button
-                            onClick={() => setMessage(null)}
-                            className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                        >
-                            Close
-                        </button>
+                        <button onClick={() => setMessage(null)} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Close</button>
                     </div>
                 </div>
             )}
@@ -752,3 +521,4 @@ const App = () => {
 };
 
 export default App;
+

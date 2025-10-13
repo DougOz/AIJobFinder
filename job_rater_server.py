@@ -1,10 +1,11 @@
 import os
 import json
+import datetime # NEW: Import datetime for timestamps
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from bson.objectid import ObjectId
 # Import the custom connection utility
-from mongodb_functions import connect_to_mongodb, DATABASE_NAME 
+from mongodb_functions import connect_to_mongodb, DATABASE_NAME
 
 app = Flask(__name__)
 CORS(app) # Enable CORS for frontend communication
@@ -15,45 +16,46 @@ MONGO_CLIENT, db = connect_to_mongodb()
 
 # Define the collections based on the user's schema
 if db is not None:
-    # 1. Job Details Collection 
+    # 1. Job Details Collection
     jobs_collection = db.dice_jobs
     # 2. Ratings Collection (for job-specific feedback)
     ratings_collection = db.job_ratings
-    # 3. Skills Proficiency Collection (NEW: for global skill ratings)
-    skills_collection = db.skills_proficiency 
+    # 3. Skills Proficiency Collection (for global skill ratings)
+    skills_collection = db.skills_proficiency
+    # 4. --- NEW: Title Ratings Collection (for global title ratings) ---
+    title_ratings_collection = db.title_ratings
     print(f"Using database: {DATABASE_NAME}")
 else:
     # If connection fails, set collections to None to handle errors gracefully in API routes
-    jobs_collection = None 
+    jobs_collection = None
     ratings_collection = None
     skills_collection = None
+    # --- NEW: Set new collection to None on failure ---
+    title_ratings_collection = None
     print("FATAL: Server is running but database collections are not accessible.")
 
 
 # The profile name used to tie ratings to a specific user.
-DEFAULT_PROFILE_NAME = 'Doug' 
+DEFAULT_PROFILE_NAME = 'Doug'
 
 
-# --- FIX: Changed route from '/api/jobs/list' to '/api/jobs' to match the frontend fetch ---
 @app.route('/api/jobs', methods=['GET'])
 def get_job_list():
     """
-    Returns a list of all available job IDs (as a JSON array of strings) 
+    Returns a list of all available job IDs (as a JSON array of strings)
     from the MongoDB 'dice_jobs' collection.
     """
     if jobs_collection is None:
         return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
-    
+
     try:
         # Fetch only the _id field from the dice_jobs collection
         job_ids = [str(job['_id']) for job in jobs_collection.find({}, {'_id': 1})]
-        
+
         if not job_ids:
             print(f"MongoDB '{jobs_collection.name}' collection is empty.")
-            # Return empty array if no jobs are found
-            return jsonify([]) 
+            return jsonify([])
 
-        # --- FIX: Return the array of IDs directly, not wrapped in an object ---
         return jsonify(job_ids)
     except Exception as e:
         print(f"Error fetching job list: {e}")
@@ -63,47 +65,40 @@ def get_job_list():
 @app.route('/api/job/<job_id>', methods=['GET'])
 def get_job_data(job_id):
     """
-    Fetches job details from 'dice_jobs', job-specific rating from 'job_ratings', 
-    and global skill proficiencies from 'skills_proficiency'.
+    Fetches job details, job-specific ratings, and global skill proficiencies.
     """
     if jobs_collection is None or ratings_collection is None or skills_collection is None:
         return jsonify({"error": "One or more database collections are unavailable."}), 500
 
     try:
-        # 1. Fetch Job Details from 'dice_jobs' collection
+        # 1. Fetch Job Details
         job_details = jobs_collection.find_one({"_id": ObjectId(job_id)})
         if not job_details:
             return jsonify({"error": "Job not found."}), 404
 
-        # Prepare job details
         job_details['_id'] = str(job_details['_id'])
-        job_details['job_id'] = job_details.pop('_id') 
+        job_details['job_id'] = job_details.pop('_id')
         job_id_str = job_details['job_id']
 
-        # 2. Fetch Existing Job-Specific Rating from 'job_ratings' collection
+        # 2. Fetch Existing Job-Specific Rating
         existing_rating = ratings_collection.find_one({
             "job_id": job_id_str,
             "profile_name": DEFAULT_PROFILE_NAME
         })
 
-        # 3. Fetch Global Skill Proficiencies from 'skills_proficiency'
+        # 3. Fetch Global Skill Proficiencies
         job_skills = job_details.get('skills', [])
         skill_proficiencies = []
         for skill_name in job_skills:
-            # Query the dedicated skills_proficiency collection for this profile's rating
             proficiency_doc = skills_collection.find_one({
                 "profile_name": DEFAULT_PROFILE_NAME,
                 "skill_name": skill_name
             })
-            
-            # Default rating to 0 if the skill has not been rated yet
             user_rating = proficiency_doc.get('user_rating', 0) if proficiency_doc else 0
-            
             skill_proficiencies.append({
                 "skill_name": skill_name,
                 "user_rating": user_rating
             })
-
 
         # 4. Compile Response
         response_data = {
@@ -125,83 +120,115 @@ def get_job_data(job_id):
 @app.route('/api/rate', methods=['POST'])
 def save_rating():
     """
-    Saves job-specific data to 'job_ratings' and updates global skill proficiencies 
-    to 'skills_proficiency'.
+    Saves job-specific data and updates global skill proficiencies.
     """
     if ratings_collection is None or skills_collection is None:
         return jsonify({"error": "One or more database collections are unavailable."}), 500
-    
+
     try:
         data = request.json
         job_id = data.get('job_id')
-        
+
         if not job_id:
             return jsonify({"error": "Missing job_id."}), 400
-        
-        timestamp = data.get('timestamp') or f"Submitted at {os.times().system}"
 
-        # --- 1. Save Job-Specific Rating to 'job_ratings' ---
-        # Note: 'rated_skills' is REMOVED from this document
+        timestamp = data.get('timestamp') or datetime.datetime.utcnow().isoformat()
+
+        # --- 1. Save Job-Specific Rating ---
         job_rating_data = {
             "job_id": job_id,
             "profile_name": DEFAULT_PROFILE_NAME,
-            "overall_score": data.get('overall_score'), 
+            "overall_score": data.get('overall_score'),
             "notes": data.get('notes'),
             "highlights": data.get('highlights'),
             "rated_timestamp": timestamp
         }
-
-        # Query uses composite key (job_id, profile_name)
         ratings_collection.update_one(
-            {
-                "job_id": job_id, 
-                "profile_name": DEFAULT_PROFILE_NAME
-            },
+            {"job_id": job_id, "profile_name": DEFAULT_PROFILE_NAME},
             {"$set": job_rating_data},
-            upsert=True 
+            upsert=True
         )
-        
-        # --- 2. Save/Update Global Skill Proficiencies to 'skills_proficiency' ---
+
+        # --- 2. Save/Update Global Skill Proficiencies ---
         rated_skills = data.get('rated_skills', [])
-        
         if rated_skills:
             for skill in rated_skills:
                 skill_name = skill.get('skill_name')
                 user_rating = skill.get('user_rating')
-                
                 if skill_name and user_rating is not None:
-                    # Query uses composite key (profile_name, skill_name) for global consistency
                     skills_collection.update_one(
-                        {
-                            "profile_name": DEFAULT_PROFILE_NAME, 
-                            "skill_name": skill_name
-                        },
-                        {"$set": {
-                            "user_rating": user_rating,
-                            "last_updated": timestamp
-                        }},
+                        {"profile_name": DEFAULT_PROFILE_NAME, "skill_name": skill_name},
+                        {"$set": {"user_rating": user_rating, "last_updated": timestamp}},
                         upsert=True
                     )
-        
-        return jsonify({"message": f"Rating for job {job_id} saved, and {len(rated_skills)} skills updated globally."}), 200
+
+        return jsonify({"message": f"Rating for job {job_id} saved, and {len(rated_skills)} skills updated."}), 200
 
     except Exception as e:
         print(f"Error saving rating: {e}")
         return jsonify({"error": f"Internal server error during rating save: {e}"}), 500
 
 
-if __name__ == '__main__':
-    # Initial setup check and final client closing
+# --- NEW: Endpoint to get all title ratings for the current profile ---
+@app.route('/api/titles/ratings', methods=['GET'])
+def get_title_ratings():
+    """
+    Fetches all title ratings and returns them as a dictionary.
+    Example: {"Software Engineer": 3, "Senior Software Engineer": 2}
+    """
+    if title_ratings_collection is None:
+        return jsonify({"error": "Title ratings collection is unavailable."}), 500
+
     try:
-        # Check if the jobs collection exists and is empty
-        # Note: count_documents({}) is preferred over estimated_document_count() for accuracy
+        ratings_cursor = title_ratings_collection.find({"profile_name": DEFAULT_PROFILE_NAME})
+        ratings_dict = {doc['title']: doc['rating'] for doc in ratings_cursor}
+        return jsonify(ratings_dict)
+    except Exception as e:
+        print(f"Error fetching title ratings: {e}")
+        return jsonify({"error": f"Internal server error: {e}"}), 500
+
+
+# --- NEW: Endpoint to save or update a single title rating ---
+@app.route('/api/titles/rate', methods=['POST'])
+def save_title_rating():
+    """
+    Saves a rating for a specific job title.
+    Expects JSON: {"title": "Software Engineer", "rating": 3}
+    """
+    if title_ratings_collection is None:
+        return jsonify({"error": "Title ratings collection is unavailable."}), 500
+    
+    try:
+        data = request.json
+        title = data.get('title')
+        rating = data.get('rating')
+
+        if not title or rating is None:
+            return jsonify({"error": "Missing 'title' or 'rating' in request."}), 400
+        
+        timestamp = datetime.datetime.utcnow().isoformat()
+
+        title_ratings_collection.update_one(
+            {"profile_name": DEFAULT_PROFILE_NAME, "title": title},
+            {"$set": {"rating": rating, "last_updated": timestamp}},
+            upsert=True
+        )
+
+        return jsonify({"message": f"Rating for title '{title}' saved."}), 200
+
+    except Exception as e:
+        print(f"Error saving title rating: {e}")
+        return jsonify({"error": f"Internal server error: {e}"}), 500
+
+
+if __name__ == '__main__':
+    try:
         if db is not None and jobs_collection is not None and jobs_collection.count_documents({}) == 0:
-            print(f"WARNING: The '{jobs_collection.name}' collection in '{DATABASE_NAME}' is empty. Please populate it with job documents.")
+            print(f"WARNING: The '{jobs_collection.name}' collection in '{DATABASE_NAME}' is empty.")
         
         port = int(os.environ.get("PORT", 5000))
         app.run(host='0.0.0.0', port=port, debug=True)
     finally:
-        # Ensure the client connection is closed when the server shuts down
         if MONGO_CLIENT:
             MONGO_CLIENT.close()
             print("MongoDB client connection closed.")
