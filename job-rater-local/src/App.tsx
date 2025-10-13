@@ -180,7 +180,7 @@ const App = () => {
             setOverallScore(data.user_overall_score || 0);
             setNotes(data.user_notes || '');
             setHighlights(data.existing_highlights || []);
-            showMessage('Job Loaded', `Job ${currentJobIndex + 1} of ${jobIds.length} loaded successfully.`);
+            //showMessage('Job Loaded', `Job ${currentJobIndex + 1} of ${jobIds.length} loaded successfully.`);
 
         } catch (error) {
             console.error('Error fetching job details:', error);
@@ -597,7 +597,7 @@ const App = () => {
                             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                 <span className="text-sm font-medium color-gray-600">Resume Match</span>
                                 <span className="text-base font-bold color-indigo-600">
-                                    {formatScoreAsPercent(jobDetails.resume_match_score)}
+                                    {formatScoreAsPercent(jobDetails.resume_score)}
                                 </span>
                             </div>
 
