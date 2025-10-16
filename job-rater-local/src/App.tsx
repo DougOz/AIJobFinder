@@ -15,7 +15,7 @@ const TITLE_RATING_MAP = {
     0: { label: 'N/R', color: '#6b7280', bgColor: '#f3f4f6' }, // Black/Gray
     1: { label: '✗', color: '#dc2626', bgColor: '#fee2e2' },   // Red X
     2: { label: '?', color: '#ca8a04', bgColor: '#fefce8' },   // Yellow ?
-    3: { label: '✓', color: '#059669', bgColor: '#ecfdf5' },   // Green Check
+    3: { label: '✓', color: '#059669', bgColor: '#ecdfef5' },   // Green Check
 };
 
 
@@ -109,6 +109,8 @@ const ThumbUpIcon = ({ className }) => (<svg className={className} xmlns="http:/
 const ThumbDownIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17h6.31l-.95 4.57-.03.32a1.5 1.5 0 001.5 1.5L12 22l1.36-6.36L15 12V3H6l-1.34 6.68L3 17zm18 0h-4V8h4v9z" /></svg>);
 const ArrowLeftIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 19l-7-7 7-7v4h11v6H10v4z" /></svg>);
 const ArrowRightIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 5l7 7-7 7v-4H3v-6h11V5z" /></svg>);
+const EyeIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z" /></svg>);
+
 
 // --- MAIN APPLICATION COMPONENT ---
 const App = () => {
@@ -125,6 +127,10 @@ const App = () => {
     const contextMenuRef = useRef(null);
     const [currentSelection, setCurrentSelection] = useState('');
     const [titleRatings, setTitleRatings] = useState({});
+
+    const [descriptionView, setDescriptionView] = useState('formatted');
+    const [liveDescription, setLiveDescription] = useState({ html: null, error: null });
+    const [isLiveDescLoading, setIsLiveDescLoading] = useState(false);
 
     const currentJobId = jobIds[currentJobIndex];
     const jobDetails = jobData.job_details || {};
@@ -164,6 +170,8 @@ const App = () => {
 
     const fetchJobDetails = useCallback(async (jobIdToFetch) => {
         if (!jobIdToFetch) return;
+        setLiveDescription({ html: null, error: null });
+        setDescriptionView('formatted');
         setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0);
         setIsLoading(true);
         try {
@@ -232,6 +240,40 @@ const App = () => {
         }
     };
 
+    const fetchLiveDescription = useCallback(async () => {
+        if (!jobDetails.url) {
+            showMessage('Error', 'This job does not have a URL to view.');
+            return;
+        }
+
+        setIsLiveDescLoading(true);
+        setLiveDescription({ html: null, error: null });
+
+        try {
+            const response = await fetch(`${API_BASE}/scrape-dice`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: jobDetails.url }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `HTTP error! Status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            setLiveDescription({ html: data.html, error: null });
+            setDescriptionView('live');
+
+        } catch (error) {
+            console.error("Error fetching live description:", error);
+            setLiveDescription({ html: null, error: `Could not load live description. The page may no longer exist or the server may be down. (Error: ${error.message})` });
+            setDescriptionView('live');
+        } finally {
+            setIsLiveDescLoading(false);
+        }
+    }, [jobDetails.url]);
+
     const goToNextJob = () => { if (currentJobIndex < jobIds.length - 1) setCurrentJobIndex(prev => prev + 1); };
     const goToPrevJob = () => { if (currentJobIndex > 0) setCurrentJobIndex(prev => prev - 1); };
 
@@ -291,7 +333,7 @@ const App = () => {
     const totalJobs = jobIds.length;
 
     const SkillsList = () => (
-        <div id="skills-list" className="space-y-2">
+        <div id="skills-list" className="space-y-1">
             {ratedSkills.length > 0 ? [...ratedSkills]
                 .sort((a, b) => {
                     const ratingA = a.user_rating || 0;
@@ -327,12 +369,12 @@ const App = () => {
         ];
 
         return (
-            <div id="skill-counts" className="space-y-3">
+            <div id="skill-counts" className="space-y-2">
                 {orderedSkillLevels.map(({ label, config }) => {
                     const count = skillCounts[label] || 0;
                     return (
-                        <div key={label} className="p-3 card-shadow-sm rounded-xl flex items-center" style={{ backgroundColor: config.bgColor }}>
-                            <span className="text-2xl font-bold mr-2 w-8 text-right" style={{ color: config.textColor }}>{count}</span>
+                        <div key={label} className="p-2 card-shadow-sm rounded-lg flex items-center" style={{ backgroundColor: config.bgColor }}>
+                            <span className="text-xl font-bold mr-2 w-8 text-right" style={{ color: config.textColor }}>{count}</span>
                             <span className="text-sm font-semibold" style={{ color: config.textColor }}>{label}</span>
                         </div>
                     );
@@ -363,20 +405,28 @@ const App = () => {
                     --color-red-600: #dc2626; --color-red-800: #991b1b;
                     --color-yellow-600: #ca8a04; --color-green-600: #059669; --color-orange-500: #f97316;
                 }
-                body { font-family: 'Inter', sans-serif; background-color: #f7f7f9; margin: 0; }
+                body { font-family: 'Inter', sans-serif; background-color: #f9fafb; margin: 0; }
                 
+                /* --- HEADER FIX --- */
+                header.app-header {
+                    background-color: #ddd;
+                    border-bottom: 1px solid var(--color-gray-200);
+                }
+
                 /* --- UTILITIES --- */
-                .bg-white { background-color: #fff; } .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+                .shadow-md { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); }
                 .rounded-xl { border-radius: 0.75rem; } .rounded-lg { border-radius: 0.5rem; } .min-h-screen { min-height: 100vh; }
-                .sticky { position: sticky; } .top-0 { top: 0; } .z-50 { z-index: 50; } .p-6 { padding: 1.5rem; } .p-5 { padding: 1.25rem; } .p-3 { padding: 0.75rem; }
-                .p-2 { padding: 0.5rem; } .pt-4 { padding-top: 1rem; } .mt-1 { margin-top: 0.25rem; } .mt-2 { margin-top: 0.5rem; }
-                .mr-2 { margin-right: 0.5rem; } .mr-4 { margin-right: 1rem; } .ml-4 { margin-left: 1rem; } .mx-2 { margin-left: 0.5rem; margin-right: 0.5rem; }
-                .mx-4 { margin-left: 1rem; margin-right: 1rem; } .space-y-6 > * + * { margin-top: 1.5rem; } .space-y-2 > * + * { margin-top: 0.5rem; }
-                .flex { display: flex; } .flex-col { flex-direction: column; } .items-center { align-items: center; } .justify-between { justify-content: space-between; }
+                .sticky { position: sticky; } .top-0 { top: 0; } .z-50 { z-index: 50; }
+                .p-6 { padding: 1.5rem; } .p-4 { padding: 1rem; } .p-3 { padding: 0.75rem; } .p-2 { padding: 0.5rem; }
+                .pt-2 { padding-top: 0.5rem; } .mt-1 { margin-top: 0.25rem; } .mt-2 { margin-top: 0.5rem; }
+                .mr-2 { margin-right: 0.5rem; } .mr-3 { margin-right: 0.75rem; } .mr-4 { margin-right: 1rem; } .ml-4 { margin-left: 1rem; } .mx-2 { margin-left: 0.5rem; margin-right: 0.5rem; }
+                .mx-4 { margin-left: 1rem; margin-right: 1rem; } 
+                .space-y-4 > * + * { margin-top: 1rem; } .space-y-2 > * + * { margin-top: 0.5rem; } .space-y-1 > * + * { margin-top: 0.25rem; }
+                .flex { display: flex; } .flex-col { flex-direction: column; } .items-center { align-items: center; } .justify-between { justify-content: space-between; } .justify-center { justify-content: center; }
                 .flex-shrink-0 { flex-shrink: 0; } .flex-grow { flex-grow: 1; } .w-full { width: 100%; } .self-center { align-self: center; }
                 .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
                 .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-                .border-none { border: none; }
+                .border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-gray-200 { border-color: #e5e7eb; } .border-none { border: none; }
                 
                 /* Description Formatting */
                 .job-description-content h3 { font-size: 1.25rem; font-weight: 700; color: var(--color-gray-800); margin-top: 1.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-gray-200); padding-bottom: 0.5rem; }
@@ -395,23 +445,22 @@ const App = () => {
                 .bg-indigo-600 { background-color: var(--color-indigo); } .hover\\:bg-indigo-700:hover { background-color: var(--color-indigo-hover); }
                 .bg-green-500 { background-color: #22c55e; } .bg-red-500 { background-color: #ef4444; }
                 .disabled\\:bg-indigo-400:disabled { background-color: #818cf8; cursor: not-allowed; opacity: 0.7; }
-                .text-xl { font-size: 1.25rem; } .text-sm { font-size: 0.875rem; } .text-xs { font-size: 0.75rem; } .text-2xl { font-size: 1.5rem; } .text-5xl { font-size: 3rem; line-height: 1; }
+                .text-xl { font-size: 1.25rem; } .text-lg { font-size: 1.125rem; } .text-sm { font-size: 0.875rem; } .text-xs { font-size: 0.75rem; } .text-2xl { font-size: 1.5rem; } .text-5xl { font-size: 3rem; line-height: 1; }
                 .font-bold { font-weight: 700; } .font-semibold { font-weight: 600; } .font-extrabold { font-weight: 800; }
                 .leading-relaxed { line-height: 1.625; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                .border { border-width: 1px; border-style: solid; }
                 .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
                 .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; }
                 .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(239, 68, 68, 0.3); }
                 #custom-context-menu { position: fixed; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px; }
                 #custom-context-menu button { display: flex; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: 6px; }
                 #custom-context-menu button:hover { background-color: #eef2ff; }
-                .main-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+                .main-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
                 @media (min-width: 1024px) { .main-grid { grid-template-columns: 280px 1fr; } }
                 .delete-btn { opacity: 0.7; } .delete-btn:hover { opacity: 1; }
                 input[type=range].header-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 1rem; width: 1rem; border-radius: 50%; background: var(--color-indigo); cursor: pointer; margin-top: -3px; }
             `}</style>
 
-            <header className="sticky top-0 bg-white shadow-lg p-3 z-50">
+            <header className="sticky top-0 app-header shadow-md p-2 z-50">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center flex-grow min-w-0" style={{ flexBasis: '50%' }}>
                         {jobDetails.title && (
@@ -461,37 +510,70 @@ const App = () => {
                 </div>
             </header>
 
-            <main className="main-grid p-6 pt-4">
-                <div id="left-sidebar" className="space-y-6">
-                    <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><ChartBarIcon className="icon-base mr-2 text-indigo-500" /> Match Scores</h2>
+            <main className="main-grid p-4 pt-2">
+                <div id="left-sidebar" className="space-y-4">
+                    <section className="bg-white p-4 rounded-xl shadow-lg">
+                        <h2 className="text-lg font-semibold color-gray-700 mb-3 flex items-center"><ChartBarIcon className="icon-base mr-2 text-indigo-500" /> Match Scores</h2>
                         <div className="space-y-2">
-                            <div className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Resume Match</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.resume_score)}</span></div>
-                            <div className="flex justify-between items-center p-3 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Semantic Score V2</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.semantic_score_v2)}</span></div>
+                            <div className="flex justify-between items-center p-2 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Resume Match</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.resume_score)}</span></div>
+                            <div className="flex justify-between items-center p-2 bg-gray-100 rounded-lg"><span className="text-sm font-medium color-gray-600">Semantic Score V2</span><span className="text-base font-bold color-indigo-600">{formatScoreAsPercent(jobDetails.semantic_score_v2)}</span></div>
                         </div>
                     </section>
-                    <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><CheckSquareIcon className="icon-base mr-2 text-green-500" /> Skill Status</h2>
+                    <section className="bg-white p-4 rounded-xl shadow-lg">
+                        <h2 className="text-lg font-semibold color-gray-700 mb-3 flex items-center"><CheckSquareIcon className="icon-base mr-2 text-green-500" /> Skill Status</h2>
                         <SkillCountsSummary />
                     </section>
-                    <section className="bg-white p-5 rounded-xl shadow-lg">
-                        <h2 className="text-lg font-semibold color-gray-700 mb-4 flex items-center"><BookOpenIcon className="icon-base mr-2 text-orange-500" /> Skills</h2>
+                    <section className="bg-white p-4 rounded-xl shadow-lg">
+                        <h2 className="text-lg font-semibold color-gray-700 mb-3 flex items-center"><BookOpenIcon className="icon-base mr-2 text-orange-500" /> Skills</h2>
                         {isLoading ? <p className="text-sm color-gray-400">Loading...</p> : <SkillsList />}
                     </section>
                 </div>
-                <div id="right-content" className="space-y-6">
+                <div id="right-content" className="space-y-4">
                     <section className="bg-white p-6 rounded-xl shadow-lg">
-                        <h2 className="text-2xl font-bold color-gray-800 mb-4">Job Description</h2>
-                        {isLoading ? <div className="color-gray-400">Loading...</div> : (
-                            <div
-                                id="job-description-content"
-                                className="color-gray-700 leading-relaxed"
-                                onContextMenu={handleContextMenu}
-                                dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)}
-                            />
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-2xl font-bold color-gray-800">Job Description</h2>
+                            {jobDetails.url && (
+                                <button
+                                    onClick={() => {
+                                        if (descriptionView === 'formatted') {
+                                            fetchLiveDescription();
+                                        } else {
+                                            setDescriptionView('formatted');
+                                        }
+                                    }}
+                                    className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-indigo-200"
+                                    disabled={isLiveDescLoading}
+                                >
+                                    <EyeIcon className="icon-xs mr-2" />
+                                    {isLiveDescLoading ? 'Loading...' : (descriptionView === 'formatted' ? 'View Live' : 'View Formatted')}
+                                </button>
+                            )}
+                        </div>
+
+                        {isLoading ? (
+                            <div className="color-gray-400">Loading...</div>
+                        ) : (
+                            descriptionView === 'live' ? (
+                                isLiveDescLoading ? (
+                                    <div className="color-gray-400">Fetching live description from Dice.com...</div>
+                                ) : (
+                                    liveDescription.error ? (
+                                        <div className="text-red-600 p-4 bg-red-50 rounded-lg">{liveDescription.error}</div>
+                                    ) : (
+                                        <div id="live-job-description" dangerouslySetInnerHTML={{ __html: liveDescription.html }} onContextMenu={handleContextMenu} />
+                                    )
+                                )
+                            ) : (
+                                <div
+                                    id="job-description-content"
+                                    className="color-gray-700 leading-relaxed"
+                                    onContextMenu={handleContextMenu}
+                                    dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)}
+                                />
+                            )
                         )}
                     </section>
-                    <section className="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                    <section className="bg-white p-6 rounded-xl shadow-lg space-y-4">
                         <h2 className="text-2xl font-bold color-gray-800">Your Notes & Highlights</h2>
                         <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Saved Highlights</h3><HighlightsList /></div>
                         <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Personal Notes</h3><textarea id="notes-input" rows="4" className="w-full p-3 border border-gray-300 rounded-lg focus-outline" placeholder="Add thoughts..." value={notes} onChange={(e) => setNotes(e.target.value)} /></div>

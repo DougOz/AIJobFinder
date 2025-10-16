@@ -1,9 +1,13 @@
 import os
 import json
-import datetime # NEW: Import datetime for timestamps
+import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from bson.objectid import ObjectId
+# --- NEW: Import libraries for web scraping ---
+import requests
+from bs4 import BeautifulSoup
+
 # Import the custom connection utility
 from mongodb_functions import connect_to_mongodb, DATABASE_NAME
 
@@ -11,51 +15,37 @@ app = Flask(__name__)
 CORS(app) # Enable CORS for frontend communication
 
 # --- MongoDB Setup ---
-# Connect to the database using the imported function
 MONGO_CLIENT, db = connect_to_mongodb()
 
-# Define the collections based on the user's schema
 if db is not None:
-    # 1. Job Details Collection
     jobs_collection = db.dice_jobs
-    # 2. Ratings Collection (for job-specific feedback)
     ratings_collection = db.job_ratings
-    # 3. Skills Proficiency Collection (for global skill ratings)
     skills_collection = db.skills_proficiency
-    # 4. --- NEW: Title Ratings Collection (for global title ratings) ---
     title_ratings_collection = db.title_ratings
     print(f"Using database: {DATABASE_NAME}")
 else:
-    # If connection fails, set collections to None to handle errors gracefully in API routes
     jobs_collection = None
     ratings_collection = None
     skills_collection = None
-    # --- NEW: Set new collection to None on failure ---
     title_ratings_collection = None
     print("FATAL: Server is running but database collections are not accessible.")
 
 
-# The profile name used to tie ratings to a specific user.
 DEFAULT_PROFILE_NAME = 'Doug'
 
 
 @app.route('/api/jobs', methods=['GET'])
 def get_job_list():
     """
-    Returns a list of all available job IDs (as a JSON array of strings)
-    from the MongoDB 'dice_jobs' collection.
+    Returns a list of all available job IDs (as a JSON array of strings).
     """
     if jobs_collection is None:
         return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
-
     try:
-        # Fetch only the _id field from the dice_jobs collection
         job_ids = [str(job['_id']) for job in jobs_collection.find({}, {'_id': 1})]
-
         if not job_ids:
             print(f"MongoDB '{jobs_collection.name}' collection is empty.")
             return jsonify([])
-
         return jsonify(job_ids)
     except Exception as e:
         print(f"Error fetching job list: {e}")
@@ -69,9 +59,7 @@ def get_job_data(job_id):
     """
     if jobs_collection is None or ratings_collection is None or skills_collection is None:
         return jsonify({"error": "One or more database collections are unavailable."}), 500
-
     try:
-        # 1. Fetch Job Details
         job_details = jobs_collection.find_one({"_id": ObjectId(job_id)})
         if not job_details:
             return jsonify({"error": "Job not found."}), 404
@@ -80,13 +68,11 @@ def get_job_data(job_id):
         job_details['job_id'] = job_details.pop('_id')
         job_id_str = job_details['job_id']
 
-        # 2. Fetch Existing Job-Specific Rating
         existing_rating = ratings_collection.find_one({
             "job_id": job_id_str,
             "profile_name": DEFAULT_PROFILE_NAME
         })
 
-        # 3. Fetch Global Skill Proficiencies
         job_skills = job_details.get('skills', [])
         skill_proficiencies = []
         for skill_name in job_skills:
@@ -100,7 +86,6 @@ def get_job_data(job_id):
                 "user_rating": user_rating
             })
 
-        # 4. Compile Response
         response_data = {
             "job_details": job_details,
             "skill_proficiencies": skill_proficiencies,
@@ -109,9 +94,7 @@ def get_job_data(job_id):
             "existing_highlights": existing_rating.get('highlights', []) if existing_rating else [],
             "source": f"MongoDB - {DATABASE_NAME}"
         }
-
         return jsonify(response_data)
-
     except Exception as e:
         print(f"Error fetching job data for {job_id}: {e}")
         return jsonify({"error": f"Internal server error when fetching job data: {e}"}), 500
@@ -124,17 +107,14 @@ def save_rating():
     """
     if ratings_collection is None or skills_collection is None:
         return jsonify({"error": "One or more database collections are unavailable."}), 500
-
     try:
         data = request.json
         job_id = data.get('job_id')
-
         if not job_id:
             return jsonify({"error": "Missing job_id."}), 400
 
         timestamp = data.get('timestamp') or datetime.datetime.utcnow().isoformat()
 
-        # --- 1. Save Job-Specific Rating ---
         job_rating_data = {
             "job_id": job_id,
             "profile_name": DEFAULT_PROFILE_NAME,
@@ -149,7 +129,6 @@ def save_rating():
             upsert=True
         )
 
-        # --- 2. Save/Update Global Skill Proficiencies ---
         rated_skills = data.get('rated_skills', [])
         if rated_skills:
             for skill in rated_skills:
@@ -163,22 +142,18 @@ def save_rating():
                     )
 
         return jsonify({"message": f"Rating for job {job_id} saved, and {len(rated_skills)} skills updated."}), 200
-
     except Exception as e:
         print(f"Error saving rating: {e}")
         return jsonify({"error": f"Internal server error during rating save: {e}"}), 500
 
 
-# --- NEW: Endpoint to get all title ratings for the current profile ---
 @app.route('/api/titles/ratings', methods=['GET'])
 def get_title_ratings():
     """
-    Fetches all title ratings and returns them as a dictionary.
-    Example: {"Software Engineer": 3, "Senior Software Engineer": 2}
+    Fetches all title ratings for the current profile.
     """
     if title_ratings_collection is None:
         return jsonify({"error": "Title ratings collection is unavailable."}), 500
-
     try:
         ratings_cursor = title_ratings_collection.find({"profile_name": DEFAULT_PROFILE_NAME})
         ratings_dict = {doc['title']: doc['rating'] for doc in ratings_cursor}
@@ -188,37 +163,75 @@ def get_title_ratings():
         return jsonify({"error": f"Internal server error: {e}"}), 500
 
 
-# --- NEW: Endpoint to save or update a single title rating ---
 @app.route('/api/titles/rate', methods=['POST'])
 def save_title_rating():
     """
     Saves a rating for a specific job title.
-    Expects JSON: {"title": "Software Engineer", "rating": 3}
     """
     if title_ratings_collection is None:
         return jsonify({"error": "Title ratings collection is unavailable."}), 500
-    
     try:
         data = request.json
         title = data.get('title')
         rating = data.get('rating')
-
         if not title or rating is None:
             return jsonify({"error": "Missing 'title' or 'rating' in request."}), 400
         
         timestamp = datetime.datetime.utcnow().isoformat()
-
         title_ratings_collection.update_one(
             {"profile_name": DEFAULT_PROFILE_NAME, "title": title},
             {"$set": {"rating": rating, "last_updated": timestamp}},
             upsert=True
         )
-
         return jsonify({"message": f"Rating for title '{title}' saved."}), 200
-
     except Exception as e:
         print(f"Error saving title rating: {e}")
         return jsonify({"error": f"Internal server error: {e}"}), 500
+
+# --- NEW: Endpoint to scrape a Dice.com job description ---
+@app.route('/api/scrape-dice', methods=['POST'])
+def scrape_dice_job():
+    """
+    Fetches a Dice.com job page and extracts the job description HTML.
+    Expects JSON: {"url": "https://www.dice.com/job-detail/..."}
+    """
+    data = request.json
+    url = data.get('url')
+
+    if not url:
+        return jsonify({"error": "Missing 'url' in request."}), 400
+
+    try:
+        # Set a user-agent to mimic a real browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        
+        # Check if the page was found
+        if response.status_code == 404:
+            return jsonify({"error": "Job listing not found on Dice.com (404 error)."}), 404
+        
+        response.raise_for_status() # Raise an exception for other bad status codes
+
+        # Parse the HTML content
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Find the specific div for the job description
+        job_description_div = soup.find('div', id='jobDescription')
+
+        if not job_description_div:
+            return jsonify({"error": "Could not find the job description section on the page."}), 404
+
+        # Return the inner HTML of the div
+        return jsonify({"html": str(job_description_div)})
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error making request to Dice.com: {e}")
+        return jsonify({"error": f"Could not connect to Dice.com: {e}"}), 500
+    except Exception as e:
+        print(f"Error scraping Dice job: {e}")
+        return jsonify({"error": f"An unexpected error occurred during scraping: {e}"}), 500
 
 
 if __name__ == '__main__':
@@ -232,3 +245,4 @@ if __name__ == '__main__':
         if MONGO_CLIENT:
             MONGO_CLIENT.close()
             print("MongoDB client connection closed.")
+
