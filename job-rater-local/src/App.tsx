@@ -132,6 +132,10 @@ const App = () => {
     const [liveDescription, setLiveDescription] = useState({ html: null, error: null });
     const [isLiveDescLoading, setIsLiveDescLoading] = useState(false);
 
+    // NEW: State for the job navigation input
+    const [jobInputIndex, setJobInputIndex] = useState('');
+
+
     const currentJobId = jobIds[currentJobIndex];
     const jobDetails = jobData.job_details || {};
 
@@ -287,6 +291,13 @@ const App = () => {
         else if (jobIds.length === 0 && !isLoading) showMessage('Notice', 'Job list is empty.');
     }, [currentJobId, fetchJobDetails]);
 
+    // NEW: Effect to sync the input box with the current job index
+    useEffect(() => {
+        if (jobIds.length > 0) {
+            setJobInputIndex((currentJobIndex + 1).toString());
+        }
+    }, [currentJobIndex, jobIds]);
+
     const handleContextMenu = useCallback((e) => {
         e.preventDefault();
         const selectedText = window.getSelection().toString().trim();
@@ -327,6 +338,19 @@ const App = () => {
     const removeHighlight = useCallback((textToRemove) => {
         setHighlights(prev => prev.filter(h => h.text !== textToRemove));
     }, []);
+
+    // NEW: Handler for navigating with the input box
+    const handleJobNavigationInput = (e) => {
+        if (e.key === 'Enter') {
+            const newIndex = parseInt(jobInputIndex, 10) - 1;
+            if (!isNaN(newIndex) && newIndex >= 0 && newIndex < jobIds.length) {
+                setCurrentJobIndex(newIndex);
+            } else {
+                showMessage('Invalid Job Number', `Please enter a number between 1 and ${jobIds.length}.`);
+                setJobInputIndex((currentJobIndex + 1).toString());
+            }
+        }
+    };
 
     const isFirstJob = currentJobIndex === 0;
     const isLastJob = currentJobIndex === jobIds.length - 1;
@@ -426,7 +450,7 @@ const App = () => {
                 .flex-shrink-0 { flex-shrink: 0; } .flex-grow { flex-grow: 1; } .w-full { width: 100%; } .self-center { align-self: center; }
                 .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
                 .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-                .border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-gray-200 { border-color: #e5e7eb; } .border-none { border: none; }
+                .border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-gray-300 { border-color: var(--color-gray-300); } .border-none { border: none; }
                 
                 /* Description Formatting */
                 .job-description-content h3 { font-size: 1.25rem; font-weight: 700; color: var(--color-gray-800); margin-top: 1.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-gray-200); padding-bottom: 0.5rem; }
@@ -437,11 +461,13 @@ const App = () => {
                 .job-description-content .footnote { font-size: 0.75rem; color: var(--color-gray-500); margin-top: 1.5rem; }
 
                 .fixed { position: fixed; } .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
-                .bg-black { background-color: rgba(0, 0, 0, 0.5); }
+                .bg-black { background-color: rgba(0, 0, 0, 0.5); } .bg-white { background-color: white; }
                 .color-gray-800 { color: var(--color-gray-800); } .color-gray-700 { color: var(--color-gray-700); }
                 .color-gray-500 { color: var(--color-gray-500); } .color-gray-400 { color: var(--color-gray-400); }
-                .color-indigo-600 { color: var(--color-indigo); } .text-white { color: white; }
-                .icon-base { width: 1.25rem; height: 1.25rem; } .icon-nav { width: 1rem; height: 1rem; } .icon-xs { width: 0.75rem; height: 0.75rem; }
+                .color-indigo-600 { color: var(--color-indigo); } .text-white { color: white; } .text-red-600 { color: #dc2626; } .text-green-700 { color: #047857; }
+                .icon-base { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; } 
+                .icon-nav { width: 1rem; height: 1rem; } 
+                .icon-xs { width: 0.75rem; height: 0.75rem; margin-right: 0.25rem; }
                 .bg-indigo-600 { background-color: var(--color-indigo); } .hover\\:bg-indigo-700:hover { background-color: var(--color-indigo-hover); }
                 .bg-green-500 { background-color: #22c55e; } .bg-red-500 { background-color: #ef4444; }
                 .disabled\\:bg-indigo-400:disabled { background-color: #818cf8; cursor: not-allowed; opacity: 0.7; }
@@ -458,6 +484,7 @@ const App = () => {
                 @media (min-width: 1024px) { .main-grid { grid-template-columns: 280px 1fr; } }
                 .delete-btn { opacity: 0.7; } .delete-btn:hover { opacity: 1; }
                 input[type=range].header-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 1rem; width: 1rem; border-radius: 50%; background: var(--color-indigo); cursor: pointer; margin-top: -3px; }
+                .w-12 { width: 3rem; } .mx-1 { margin-left: 0.25rem; margin-right: 0.25rem; } .text-center { text-align: center; }
             `}</style>
 
             <header className="sticky top-0 app-header shadow-md p-2 z-50">
@@ -503,7 +530,17 @@ const App = () => {
                     </div>
 
                     <div className="flex items-center flex-shrink-0">
-                        <span className="text-sm font-medium color-gray-600 mr-4 hidden md:inline">Job {totalJobs > 0 ? currentJobIndex + 1 : 0} of {totalJobs}</span>
+                        <span className="text-sm font-medium color-gray-600 mr-4 hidden md:inline flex items-center">
+                            Job&nbsp;
+                            <input
+                                type="text"
+                                value={jobInputIndex}
+                                onChange={(e) => setJobInputIndex(e.target.value)}
+                                onKeyDown={handleJobNavigationInput}
+                                className="w-12 text-center font-semibold rounded border border-gray-300 mx-1"
+                            />
+                            &nbsp;of {totalJobs}
+                        </span>
                         <button onClick={goToPrevJob} disabled={isFirstJob || isLoading} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 mr-2" title="Previous Job"><ArrowLeftIcon className="icon-nav" /></button>
                         <button onClick={goToNextJob} disabled={isLastJob || isLoading} className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400" title="Next Job"><ArrowRightIcon className="icon-nav" /></button>
                     </div>
@@ -590,7 +627,7 @@ const App = () => {
             )}
 
             {message && (
-                <div className="fixed inset-0 bg-black flex items-center justify-center z-[100]">
+                <div className="fixed inset-0 bg-black bg-white flex items-center justify-center z-[100]">
                     <div className="bg-white p-6 rounded-xl shadow-2xl space-y-4" style={{ maxWidth: '400px', width: '90%' }}>
                         <h3 className={`text-lg font-bold ${message.title === 'Error' ? 'color-red-600' : 'color-gray-800'}`}>{message.title}</h3>
                         <p className="color-gray-600 whitespace-pre-wrap">{message.content}</p>
