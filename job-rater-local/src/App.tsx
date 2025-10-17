@@ -34,19 +34,18 @@ const formatScoreAsPercent = (score) => {
 const formatDescription = (text) => {
     if (!text) return '<p>Job description not available.</p>';
     let processedText = text;
-    const headingKeywords = [
-        'Job Number:', 'The Opportunity:', 'You Have:', 'Nice If You Have:', 'Clearance:', 'Compensation', 'Identity Statement', 'Work Model', 'Commitment to Non-Discrimination',
-        'Location:', 'Salary:', 'Description:', 'About the Role', 'Key Responsibilities', 'Minimum Qualifications', 'Work Flexibility', 'Contact:',
-        'Required Skills & Experience', 'Desired Skills & Experience', 'What You Will Be Doing', 'The Offer', 'Pay & Benefits',
-        'Overview', 'Responsibilities', 'Compensation and Benefits', 'Qualifications',
-        'Company Overview', 'Group/Division', 'Job Description/Preferred Qualifications',
-        'Job Description Summary', 'Job Description', 'Roles & Responsibilities', 'Desired Qualifications', 'Additional Information',
-        'Position:', 'Duration:', 'Job ID:', 'Job Overview:', 'Pay Range:', 'About PTR Global',
-        'Basic Qualifications', 'CLEARANCE REQUIREMENTS:', 'Responsibilities for this Position', 'What sets you apart:', 'Our Commitment to You:', 'Workplace Options:', 'Salary Note',
-        'Who You Are:', 'The Work:', 'What We\'re Doing:', 'Who We Are:', 'Why Join Us:', 'EEO', 'Other Important Information', 'Work Schedule Information', 'National Pay Statement', 'Premium Pay Statement',
-        'What’s in it for you:', 'What you get to do:', 'What you need to succeed:', 'Growth Opportunity', 'Work Arrangement', 'Visa Requirements',
-        'Primary Responsibilities:', 'Why Join Data Intelligence, LLC?', 'About Us:', 'Job Summary', 'DUTIES AND RESPONSIBILITIES:', 'REQUIRED EXPERIENCE:', 'JOB QUALIFICATIONS:', 'APPLY TO:', 'START DATE:',
-        'What you\'ll do', 'What experience you need', 'What could set you apart'
+      const headingKeywords = [
+        'Job Number', 'The Opportunity', 'You Have', 'Nice If You Have', 'Clearance', 'Compensation', 'Identity Statement', 'Work Model', 'Commitment to Non-Discrimination',
+        'Location', 'Salary', 'Description', 'About the Role', 'Key Responsibilities', 'Minimum Qualifications', 'Preferred Qualifications', 'Work Flexibility', 'Contact',
+        'Required Skills & Experience', 'Desired Skills & Experience', 'What You Will Be Doing', 'The Offer', 'Pay & Benefits', 'Benefits',
+        'Overview', 'Responsibilities', 'Compensation and Benefits', 'Qualifications', 'Basic Qualifications',
+        'Company Overview', 'Group/Division', 'Job Description', 'Roles & Responsibilities', 'Desired Qualifications', 'Additional Information',
+        'Position', 'Duration', 'Job ID', 'Job Overview', 'Pay Range', 'About',
+        'CLEARANCE REQUIREMENTS', 'Responsibilities for this Position', 'What sets you apart', 'Our Commitment to You', 'Workplace Options', 'Salary Note',
+        'Who You Are', 'The Work', 'What We\'re Doing', 'Who We Are', 'Why Join Us', 'EEO', 'Other Important Information', 'Work Schedule', 'National Pay Statement',
+        'What’s in it for you', 'What you get to do', 'What you need to succeed', 'Growth Opportunity', 'Work Arrangement', 'Visa Requirements',
+        'Primary Responsibilities', 'Why Join', 'About Us', 'Job Summary', 'DUTIES AND RESPONSIBILITIES', 'REQUIRED EXPERIENCE', 'JOB QUALIFICATIONS', 'APPLY TO:', 'START DATE',
+        'What you\'ll do', 'What experience you need', 'What could set you apart', 'Tech Breakdown', 'Daily Responsibilities'
     ];
     const preHeadingRegex = new RegExp(`(${headingKeywords.join('|')})`, 'gi');
     processedText = processedText.replace(preHeadingRegex, '\n\n$1');
@@ -132,8 +131,12 @@ const App = () => {
     const [liveDescription, setLiveDescription] = useState({ html: null, error: null });
     const [isLiveDescLoading, setIsLiveDescLoading] = useState(false);
 
-    // NEW: State for the job navigation input
     const [jobInputIndex, setJobInputIndex] = useState('');
+
+    // --- NEW: States for unsaved changes warning ---
+    const [originalJobState, setOriginalJobState] = useState(null);
+    const [isDirty, setIsDirty] = useState(false);
+    const [navigationAction, setNavigationAction] = useState(null);
 
 
     const currentJobId = jobIds[currentJobIndex];
@@ -149,7 +152,10 @@ const App = () => {
     };
     const skillCounts = calculateSkillCounts();
 
-    const showMessage = (title, content) => { setMessage({ title, content }); };
+    // UPDATED: Can now accept buttons for confirmation dialogs
+    const showMessage = (title, content, buttons = null) => {
+        setMessage({ title, content, buttons });
+    };
 
     const fetchJobIds = useCallback(async () => {
         setIsLoading(true);
@@ -182,18 +188,33 @@ const App = () => {
             const response = await fetch(`${API_BASE}/job/${jobIdToFetch}`);
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}.`);
             const data = await response.json();
+
+            const fetchedData = {
+                overallScore: data.user_overall_score || 0,
+                notes: data.user_notes || '',
+                highlights: data.existing_highlights || [],
+                ratedSkills: data.skill_proficiencies || [],
+            };
+
             setJobData(data);
-            setRatedSkills(data.skill_proficiencies || []);
-            setOverallScore(data.user_overall_score || 0);
-            setNotes(data.user_notes || '');
-            setHighlights(data.existing_highlights || []);
+            setRatedSkills(fetchedData.ratedSkills);
+            setOverallScore(fetchedData.overallScore);
+            setNotes(fetchedData.notes);
+            setHighlights(fetchedData.highlights);
+
+            setOriginalJobState({
+                ...fetchedData,
+                titleRating: titleRatings[data.job_details?.title] || 0,
+            });
+            setIsDirty(false);
+
         } catch (error) {
             console.error('Error fetching job details:', error);
             showMessage('Error', `Failed to load details for job ${jobIdToFetch}. ${error.message}`);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [titleRatings]);
 
     const saveRating = async () => {
         if (isLoading || !currentJobId) return;
@@ -209,9 +230,19 @@ const App = () => {
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}.`);
             const result = await response.json();
             showMessage('Success', result.message);
+
+            const newOriginalState = {
+                overallScore, notes, highlights, ratedSkills,
+                titleRating: titleRatings[jobDetails.title] || 0,
+            };
+            setOriginalJobState(newOriginalState);
+            setIsDirty(false);
+            return true; // Return true on success
+
         } catch (error) {
             console.error('Error saving rating:', error);
             showMessage('Error', `Failed to save rating. ${error.message}`);
+            return false; // Return false on failure
         } finally {
             setIsLoading(false);
         }
@@ -278,8 +309,55 @@ const App = () => {
         }
     }, [jobDetails.url]);
 
-    const goToNextJob = () => { if (currentJobIndex < jobIds.length - 1) setCurrentJobIndex(prev => prev + 1); };
-    const goToPrevJob = () => { if (currentJobIndex > 0) setCurrentJobIndex(prev => prev - 1); };
+    const handleNavigation = (action) => {
+        if (isDirty) {
+            setNavigationAction(() => action);
+            showMessage(
+                'Unsaved Changes',
+                'You have unsaved changes. Are you sure you want to proceed without saving?',
+                [
+                    {
+                        text: 'Continue without Saving',
+                        onClick: () => {
+                            action();
+                            setMessage(null);
+                        },
+                        className: 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                    },
+                    {
+                        text: 'Save and Continue',
+                        onClick: async () => {
+                            const success = await saveRating();
+                            if (success) {
+                                action();
+                            }
+                            setMessage(null);
+                        },
+                        className: 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    },
+                    {
+                        text: 'Cancel',
+                        onClick: () => setMessage(null),
+                        className: 'bg-red-500 text-white hover:bg-red-600'
+                    }
+                ]
+            );
+        } else {
+            action();
+        }
+    };
+
+    const goToNextJob = () => handleNavigation(() => {
+        if (currentJobIndex < jobIds.length - 1) {
+            setCurrentJobIndex(prev => prev + 1);
+        }
+    });
+
+    const goToPrevJob = () => handleNavigation(() => {
+        if (currentJobIndex > 0) {
+            setCurrentJobIndex(prev => prev - 1);
+        }
+    });
 
     useEffect(() => {
         fetchJobIds();
@@ -287,16 +365,50 @@ const App = () => {
     }, [fetchJobIds, fetchTitleRatings]);
 
     useEffect(() => {
-        if (currentJobId) fetchJobDetails(currentJobId);
-        else if (jobIds.length === 0 && !isLoading) showMessage('Notice', 'Job list is empty.');
-    }, [currentJobId, fetchJobDetails]);
+        if (jobIds.length > 0 && currentJobId) {
+            fetchJobDetails(currentJobId);
+        } else if (jobIds.length === 0 && !isLoading) {
+            showMessage('Notice', 'Job list is empty.');
+        }
+    }, [currentJobId, jobIds]);
 
-    // NEW: Effect to sync the input box with the current job index
     useEffect(() => {
         if (jobIds.length > 0) {
             setJobInputIndex((currentJobIndex + 1).toString());
         }
     }, [currentJobIndex, jobIds]);
+
+    useEffect(() => {
+        if (!originalJobState) return;
+
+        const currentState = {
+            overallScore: overallScore,
+            notes: notes,
+            highlights: highlights,
+            ratedSkills: ratedSkills,
+            titleRating: titleRatings[jobDetails.title] || 0
+        };
+
+        // Deep but order-agnostic comparison for arrays of objects
+        const arraysAreEqual = (a, b) => {
+            if (a.length !== b.length) return false;
+            const stringA = a.map(item => JSON.stringify(item)).sort().join('');
+            const stringB = b.map(item => JSON.stringify(item)).sort().join('');
+            return stringA === stringB;
+        };
+
+        if (
+            currentState.overallScore !== originalJobState.overallScore ||
+            currentState.notes !== originalJobState.notes ||
+            currentState.titleRating !== originalJobState.titleRating ||
+            !arraysAreEqual(currentState.highlights, originalJobState.highlights) ||
+            !arraysAreEqual(currentState.ratedSkills, originalJobState.ratedSkills)
+        ) {
+            setIsDirty(true);
+        } else {
+            setIsDirty(false);
+        }
+    }, [overallScore, notes, highlights, ratedSkills, titleRatings, originalJobState, jobDetails.title]);
 
     const handleContextMenu = useCallback((e) => {
         e.preventDefault();
@@ -339,12 +451,11 @@ const App = () => {
         setHighlights(prev => prev.filter(h => h.text !== textToRemove));
     }, []);
 
-    // NEW: Handler for navigating with the input box
     const handleJobNavigationInput = (e) => {
         if (e.key === 'Enter') {
             const newIndex = parseInt(jobInputIndex, 10) - 1;
             if (!isNaN(newIndex) && newIndex >= 0 && newIndex < jobIds.length) {
-                setCurrentJobIndex(newIndex);
+                handleNavigation(() => setCurrentJobIndex(newIndex));
             } else {
                 showMessage('Invalid Job Number', `Please enter a number between 1 and ${jobIds.length}.`);
                 setJobInputIndex((currentJobIndex + 1).toString());
@@ -626,12 +737,21 @@ const App = () => {
                 </div>
             )}
 
+            {/* UPDATED: Message box now supports multiple buttons */}
             {message && (
-                <div className="fixed inset-0 bg-black bg-white flex items-center justify-center z-[100]">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-100">
                     <div className="bg-white p-6 rounded-xl shadow-2xl space-y-4" style={{ maxWidth: '400px', width: '90%' }}>
-                        <h3 className={`text-lg font-bold ${message.title === 'Error' ? 'color-red-600' : 'color-gray-800'}`}>{message.title}</h3>
+                        <h3 className={`text-lg font-bold ${message.title === 'Error' ? 'text-red-600' : 'text-gray-800'}`}>{message.title}</h3>
                         <p className="color-gray-600 whitespace-pre-wrap">{message.content}</p>
-                        <button onClick={() => setMessage(null)} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Close</button>
+                        <div className="flex justify-end space-x-2">
+                            {message.buttons ? (
+                                message.buttons.map(btn => (
+                                    <button key={btn.text} onClick={btn.onClick} className={`px-4 py-2 rounded-lg font-semibold ${btn.className}`}>{btn.text}</button>
+                                ))
+                            ) : (
+                                <button onClick={() => setMessage(null)} className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Close</button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -640,4 +760,3 @@ const App = () => {
 };
 
 export default App;
-
