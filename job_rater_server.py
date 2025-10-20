@@ -1,5 +1,6 @@
 import os
 import json
+import random
 import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -42,7 +43,8 @@ def get_job_list():
     if jobs_collection is None:
         return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
     try:
-        job_ids = [str(job['_id']) for job in jobs_collection.find({}, {'_id': 1})]
+        job_ids = [str(job['_id']) for job in jobs_collection.find({"is_active": True}, {'_id': 1})]
+        random.shuffle(job_ids)
         if not job_ids:
             print(f"MongoDB '{jobs_collection.name}' collection is empty.")
             return jsonify([])
@@ -245,4 +247,3 @@ if __name__ == '__main__':
         if MONGO_CLIENT:
             MONGO_CLIENT.close()
             print("MongoDB client connection closed.")
-

@@ -127,11 +127,8 @@ const App = () => {
     const [currentSelection, setCurrentSelection] = useState('');
     const [titleRatings, setTitleRatings] = useState({});
 
-    const [descriptionView, setDescriptionView] = useState('formatted');
-    const [liveDescription, setLiveDescription] = useState({ html: null, error: null });
-    const [isLiveDescLoading, setIsLiveDescLoading] = useState(false);
-
     const [jobInputIndex, setJobInputIndex] = useState('');
+    const [descriptionView, setDescriptionView] = useState('live');
 
     // --- NEW: States for unsaved changes warning ---
     const [originalJobState, setOriginalJobState] = useState(null);
@@ -180,8 +177,7 @@ const App = () => {
 
     const fetchJobDetails = useCallback(async (jobIdToFetch) => {
         if (!jobIdToFetch) return;
-        setLiveDescription({ html: null, error: null });
-        setDescriptionView('formatted');
+        setDescriptionView('live'); // Default to live view on new job load
         setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0);
         setIsLoading(true);
         try {
@@ -274,40 +270,6 @@ const App = () => {
             showMessage('Error', 'Failed to save title rating.');
         }
     };
-
-    const fetchLiveDescription = useCallback(async () => {
-        if (!jobDetails.url) {
-            showMessage('Error', 'This job does not have a URL to view.');
-            return;
-        }
-
-        setIsLiveDescLoading(true);
-        setLiveDescription({ html: null, error: null });
-
-        try {
-            const response = await fetch(`${API_BASE}/scrape-dice`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: jobDetails.url }),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || `HTTP error! Status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            setLiveDescription({ html: data.html, error: null });
-            setDescriptionView('live');
-
-        } catch (error) {
-            console.error("Error fetching live description:", error);
-            setLiveDescription({ html: null, error: `Could not load live description. The page may no longer exist or the server may be down. (Error: ${error.message})` });
-            setDescriptionView('live');
-        } finally {
-            setIsLiveDescLoading(false);
-        }
-    }, [jobDetails.url]);
 
     const handleNavigation = (action) => {
         if (isDirty) {
@@ -680,37 +642,26 @@ const App = () => {
                     <section className="bg-white p-6 rounded-xl shadow-lg">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold color-gray-800">Job Description</h2>
-                            {jobDetails.url && (
+                            {jobDetails.html_description && (
                                 <button
                                     onClick={() => {
-                                        if (descriptionView === 'formatted') {
-                                            fetchLiveDescription();
-                                        } else {
-                                            setDescriptionView('formatted');
-                                        }
+                                        setDescriptionView(prev => prev === 'live' ? 'formatted' : 'live');
                                     }}
                                     className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-indigo-200"
-                                    disabled={isLiveDescLoading}
                                 >
                                     <EyeIcon className="icon-xs mr-2" />
-                                    {isLiveDescLoading ? 'Loading...' : (descriptionView === 'formatted' ? 'View Live' : 'View Formatted')}
+                                    {descriptionView === 'live' ? 'View Formatted' : 'View Live'}
                                 </button>
                             )}
                         </div>
 
                         {isLoading ? (
                             <div className="color-gray-400">Loading...</div>
+                        ) : descriptionView === 'live' ? (
+                            <div id="live-job-description" dangerouslySetInnerHTML={renderDescriptionWithHighlights(jobDetails.html_description, highlights)} onContextMenu={handleContextMenu} />
                         ) : (
-                            descriptionView === 'live' ? (
-                                isLiveDescLoading ? (
-                                    <div className="color-gray-400">Fetching live description from Dice.com...</div>
-                                ) : (
-                                    liveDescription.error ? (
-                                        <div className="text-red-600 p-4 bg-red-50 rounded-lg">{liveDescription.error}</div>
-                                    ) : (
-                                        <div id="live-job-description" dangerouslySetInnerHTML={{ __html: liveDescription.html }} onContextMenu={handleContextMenu} />
-                                    )
-                                )
+                            jobDetails.description ? (
+                                <div id="job-description-content" className="color-gray-700 leading-relaxed" onContextMenu={handleContextMenu} dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)} />
                             ) : (
                                 <div
                                     id="job-description-content"
