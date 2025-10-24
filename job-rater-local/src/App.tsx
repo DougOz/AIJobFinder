@@ -119,6 +119,7 @@ const App = () => {
     const [ratedSkills, setRatedSkills] = useState([]);
     const [overallScore, setOverallScore] = useState(0);
     const [notes, setNotes] = useState('');
+    const [reviewLater, setReviewLater] = useState(false);
     const [highlights, setHighlights] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [message, setMessage] = useState(null);
@@ -177,8 +178,8 @@ const App = () => {
 
     const fetchJobDetails = useCallback(async (jobIdToFetch) => {
         if (!jobIdToFetch) return;
-        setDescriptionView('live'); // Default to live view on new job load
-        setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0);
+        setDescriptionView('live');
+        setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0); setReviewLater(false);
         setIsLoading(true);
         try {
             const response = await fetch(`${API_BASE}/job/${jobIdToFetch}`);
@@ -190,6 +191,7 @@ const App = () => {
                 notes: data.user_notes || '',
                 highlights: data.existing_highlights || [],
                 ratedSkills: data.skill_proficiencies || [],
+                reviewLater: data.review_later || false,
             };
 
             setJobData(data);
@@ -197,6 +199,7 @@ const App = () => {
             setOverallScore(fetchedData.overallScore);
             setNotes(fetchedData.notes);
             setHighlights(fetchedData.highlights);
+            setReviewLater(fetchedData.reviewLater);
 
             setOriginalJobState({
                 ...fetchedData,
@@ -217,7 +220,8 @@ const App = () => {
         setIsLoading(true);
         const payload = {
             job_id: currentJobId, overall_score: overallScore, notes: notes,
-            highlights: highlights, rated_skills: ratedSkills, timestamp: new Date().toISOString()
+            highlights: highlights, rated_skills: ratedSkills, timestamp: new Date().toISOString(),
+            review_later: reviewLater
         };
         try {
             const response = await fetch(`${API_BASE}/rate`, {
@@ -228,7 +232,7 @@ const App = () => {
             showMessage('Success', result.message);
 
             const newOriginalState = {
-                overallScore, notes, highlights, ratedSkills,
+                overallScore, notes, highlights, ratedSkills, reviewLater,
                 titleRating: titleRatings[jobDetails.title] || 0,
             };
             setOriginalJobState(newOriginalState);
@@ -348,6 +352,7 @@ const App = () => {
             notes: notes,
             highlights: highlights,
             ratedSkills: ratedSkills,
+            reviewLater: reviewLater,
             titleRating: titleRatings[jobDetails.title] || 0
         };
 
@@ -363,6 +368,7 @@ const App = () => {
             currentState.overallScore !== originalJobState.overallScore ||
             currentState.notes !== originalJobState.notes ||
             currentState.titleRating !== originalJobState.titleRating ||
+            currentState.reviewLater !== originalJobState.reviewLater ||
             !arraysAreEqual(currentState.highlights, originalJobState.highlights) ||
             !arraysAreEqual(currentState.ratedSkills, originalJobState.ratedSkills)
         ) {
@@ -370,7 +376,7 @@ const App = () => {
         } else {
             setIsDirty(false);
         }
-    }, [overallScore, notes, highlights, ratedSkills, titleRatings, originalJobState, jobDetails.title]);
+    }, [overallScore, notes, highlights, ratedSkills, titleRatings, originalJobState, jobDetails.title, reviewLater]);
 
     const handleContextMenu = useCallback((e) => {
         e.preventDefault();
@@ -675,7 +681,21 @@ const App = () => {
                     <section className="bg-white p-6 rounded-xl shadow-lg space-y-4">
                         <h2 className="text-2xl font-bold color-gray-800">Your Notes & Highlights</h2>
                         <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Saved Highlights</h3><HighlightsList /></div>
-                        <div><h3 className="text-lg font-semibold color-gray-700 mb-2">Personal Notes</h3><textarea id="notes-input" rows="4" className="w-full p-3 border border-gray-300 rounded-lg focus-outline" placeholder="Add thoughts..." value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-lg font-semibold color-gray-700">Personal Notes</h3>
+                                <label className="flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={reviewLater}
+                                        onChange={(e) => setReviewLater(e.target.checked)}
+                                        className="mr-2 cursor-pointer"
+                                    />
+                                    <span className="text-sm font-medium color-gray-600">Review Later</span>
+                                </label>
+                            </div>
+                            <textarea id="notes-input" rows="4" className="w-full p-3 border border-gray-300 rounded-lg focus-outline" placeholder="Add thoughts..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                        </div>
                         <button onClick={saveRating} className="w-full py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg flex items-center justify-center disabled:bg-indigo-400" disabled={isLoading || !currentJobId}><FloppyDiskIcon className="icon-base mr-2" />{isLoading ? 'Saving...' : 'Save Rating and Skills'}</button>
                     </section>
                 </div>

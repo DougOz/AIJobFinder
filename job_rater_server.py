@@ -94,6 +94,7 @@ def get_job_data(job_id):
             "user_overall_score": existing_rating.get('overall_score') if existing_rating else None,
             "user_notes": existing_rating.get('notes') if existing_rating else None,
             "existing_highlights": existing_rating.get('highlights', []) if existing_rating else [],
+            "review_later": existing_rating.get('review_later', False) if existing_rating else False,
             "source": f"MongoDB - {DATABASE_NAME}"
         }
         return jsonify(response_data)
@@ -123,7 +124,8 @@ def save_rating():
             "overall_score": data.get('overall_score'),
             "notes": data.get('notes'),
             "highlights": data.get('highlights'),
-            "rated_timestamp": timestamp
+            "rated_timestamp": timestamp,
+            "review_later": data.get('review_later', False)
         }
         ratings_collection.update_one(
             {"job_id": job_id, "profile_name": DEFAULT_PROFILE_NAME},
