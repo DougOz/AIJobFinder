@@ -35,15 +35,14 @@ from bson.objectid import ObjectId # <-- Import ObjectId
 from bson.errors import InvalidId
 
 # sklearn imports
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.impute import SimpleImputer
 
-# Semantic imports
-from sentence_transformers import SentenceTransformer, util
-import torch
+# --- Custom Transformers ---
+# Import our custom classes from their own file
+from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer
+
 
 # --- CONFIGURATION ---
 JOB_RATINGS_COLLECTION = "job_ratings"
@@ -213,177 +212,6 @@ def load_data():
         if client:
             client.close()
             print("MongoDB connection closed.")
-
-
-# --- CUSTOM SKLEARN TRANSFORMERS ---
-
-class TitleRatingTransformer(BaseEstimator, TransformerMixin):
-    """
-    Transforms the 'title_rating' column.
-    Missing values (unrated titles) are imputed with 2.0 (neutral).
-    """
-    def __init__(self, neutral_value=2.0):
-        self.neutral_value = neutral_value
-        
-    def fit(self, X, y=None):
-        return self # Nothing to fit
-        
-    def transform(self, X, y=None):
-        # X is expected to be a DataFrame
-        # .fillna() handles None, np.nan, etc.
-        # .values returns numpy array, .reshape(-1, 1) makes it a single column
-        return X['title_rating'].fillna(self.neutral_value).values.reshape(-1, 1)
-
-
-class SkillFeaturesTransformer(BaseEstimator, TransformerMixin):
-    """
-    Transforms the 'skills' column (a list of skill objects) into three features:
-    1. mean_skill_rating (unrated = 2.0)
-    2. num_expert_skills (rated 3)
-    3. num_novice_skills (rated 1)
-    """
-    def __init__(self, neutral_value=2.0, expert_val=3, novice_val=1):
-        self.neutral_value = neutral_value
-        self.expert_val = expert_val
-        self.novice_val = novice_val
-
-    def fit(self, X, y=None):
-        return self # Nothing to fit
-
-    def transform(self, X, y=None):
-        # X is expected to be a DataFrame
-        features = []
-        
-        # X['skills'] is a pandas Series, iterate over its values
-        for skills_list in X['skills']:
-            if not isinstance(skills_list, list) or not skills_list:
-                # Handle missing or empty skills list
-                features.append([self.neutral_value, 0, 0])
-                continue
-
-            ratings = []
-            num_expert = 0
-            num_novice = 0
-            
-            for skill in skills_list:
-                # 'skill' is {'skill': 'Python', 'rating': 3}
-                rating = skill.get('rating') # This is the proficiency rating
-                
-                if rating:
-                    try:
-                        rating_val = int(rating)
-                        ratings.append(rating_val)
-                        if rating_val == self.expert_val:
-                            num_expert += 1
-                        elif rating_val == self.novice_val:
-                            num_novice += 1
-                    except (ValueError, TypeError):
-                        ratings.append(self.neutral_value)
-                else:
-                    # Skill is in the list but not rated by user
-                    ratings.append(self.neutral_value)
-
-            mean_rating = np.mean(ratings) if ratings else self.neutral_value
-            features.append([mean_rating, num_expert, num_novice])
-            
-        return np.array(features)
-
-
-class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
-    """
-    Transforms the 'job_description' column based on highlights.
-    Solution B (Semantic Matching).
-    """
-    def __init__(self, highlights_df, model_name='all-MiniLM-L6-v2'):
-        print(f"Initializing SemanticHighlightScorer...")
-        self.highlights_df = highlights_df
-        self.model_name = model_name
-        self.model = None
-        self.liked_phrases = []
-        self.disliked_phrases = []
-        self.liked_embeddings = None
-        self.disliked_embeddings = None
-        self.device = None
-
-    def fit(self, X, y=None): # X here is the job_description column, but we don't use it for fitting this transformer
-        print(f"Fitting SemanticHighlightScorer...")
-
-        if self.highlights_df.empty:
-            print("Warning: No highlights found in highlights_df. Semantic scores will all be 0.")
-            self.liked_phrases = []
-            self.disliked_phrases = []
-        else:
-            self.liked_phrases = self.highlights_df[self.highlights_df['type'] == 'like']['text'].tolist()
-            self.disliked_phrases = self.highlights_df[self.highlights_df['type'] == 'dislike']['text'].tolist()
-
-        if not self.liked_phrases and not self.disliked_phrases:
-             print("Warning: No liked or disliked phrases found after filtering highlights_df. Semantic scores will all be 0.")
-        
-        # Only load the model and encode if there are phrases to encode
-        if self.liked_phrases or self.disliked_phrases:
-            print(f"Loading sentence transformer model '{self.model_name}'... (This may take a moment)")
-            self.model = SentenceTransformer(self.model_name)
-            print("Model loaded.")
-            
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            self.model.to(self.device)
-            print(f"Using device: {self.device}")
-
-            print(f"Encoding {len(self.liked_phrases)} 'like' and {len(self.disliked_phrases)} 'dislike' phrases...")
-            if self.liked_phrases:
-                self.liked_embeddings = self.model.encode(self.liked_phrases, convert_to_tensor=True, device=self.device)
-            
-            if self.disliked_phrases:
-                self.disliked_embeddings = self.model.encode(self.disliked_phrases, convert_to_tensor=True, device=self.device)
-                
-            print("Highlight phrases encoded and stored.")
-        else:
-            print("No phrases to encode. Semantic model will not be loaded.")
-
-        return self
-
-    def transform(self, X, y=None):
-        # X is expected to be a pandas Series of job descriptions
-        print(f"Generating semantic embeddings for {len(X)} job descriptions...")
-        
-        # If no model was loaded (because no highlights were found), return zeros
-        if self.model is None:
-            print("No semantic model loaded (no highlights found). Returning zero scores.")
-            return np.zeros((len(X), 2)) # Return a 2-column array of zeros
-
-        # Ensure descriptions are strings
-        descriptions = X.fillna('').tolist()
-        
-        # Generate embeddings for all job descriptions in the batch
-        desc_embeddings = self.model.encode(descriptions, convert_to_tensor=True, device=self.device, show_progress_bar=True)
-        
-        # Calculate cosine similarity
-        
-        # --- Liked Scores ---
-        if self.liked_embeddings is not None and self.liked_embeddings.nelement() > 0:
-            # Compare all descriptions to all liked phrases
-            liked_sims = util.cos_sim(desc_embeddings, self.liked_embeddings)
-            # Find the *best* match for each description
-            max_liked_scores, _ = liked_sims.max(dim=1)
-        else:
-            # No liked phrases, so all scores are 0
-            max_liked_scores = torch.zeros(len(X), device=self.device)
-            
-        # --- Disliked Scores ---
-        if self.disliked_embeddings is not None and self.disliked_embeddings.nelement() > 0:
-            # Compare all descriptions to all disliked phrases
-            disliked_sims = util.cos_sim(desc_embeddings, self.disliked_embeddings)
-            # Find the *best* match for each description
-            max_disliked_scores, _ = disliked_sims.max(dim=1)
-        else:
-            # No disliked phrases, so all scores are 0
-            max_disliked_scores = torch.zeros(len(X), device=self.device)
-            
-        # Combine scores and return as a numpy array
-        scores = np.array(list(zip(max_liked_scores.cpu().numpy(), max_disliked_scores.cpu().numpy())))
-        
-        print("Semantic scores calculated.")
-        return scores
 
 
 # --- MAIN EXECUTION ---
