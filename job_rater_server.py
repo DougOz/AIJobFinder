@@ -44,9 +44,25 @@ def get_job_list():
         return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
     try:
         job_ids = [str(job['_id']) for job in jobs_collection.find({"is_active": True}, {'_id': 1})]
-        random.shuffle(job_ids)
+
+        # Filter job_ids to only include those with populated notes in ratings_collection
+        if ratings_collection is not None:
+            # Find job_ids from ratings_collection where notes are not empty
+            # We use $ne (not equal) to filter out both None and empty strings.
+            job_ids_with_populated_notes_cursor = ratings_collection.find(
+                {"profile_name": DEFAULT_PROFILE_NAME, "notes": {"$ne": None, "$ne": ""}},
+                {"job_id": 1, "_id": 0} # Project only job_id, exclude _id
+            )
+            job_ids_with_populated_notes = {doc['job_id'] for doc in job_ids_with_populated_notes_cursor}
+
+            # Filter the initial list of job_ids
+            job_ids = [job_id for job_id in job_ids if job_id in job_ids_with_populated_notes]
+        else:
+            print("WARNING: ratings_collection is unavailable, cannot filter by populated notes.")
+
+        #random.shuffle(job_ids)
         if not job_ids:
-            print(f"MongoDB '{jobs_collection.name}' collection is empty.")
+            print(f"MongoDB '{jobs_collection.name}' collection is empty or no jobs match the filter.")
             return jsonify([])
         return jsonify(job_ids)
     except Exception as e:
