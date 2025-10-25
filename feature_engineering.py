@@ -296,49 +296,61 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
     """
     def __init__(self, highlights_df, model_name='all-MiniLM-L6-v2'):
         print(f"Initializing SemanticHighlightScorer...")
-        
-        if highlights_df.empty:
-            print("Warning: No highlights found. Semantic scores will all be 0.")
+        self.highlights_df = highlights_df
+        self.model_name = model_name
+        self.model = None
+        self.liked_phrases = []
+        self.disliked_phrases = []
+        self.liked_embeddings = None
+        self.disliked_embeddings = None
+        self.device = None
+
+    def fit(self, X, y=None): # X here is the job_description column, but we don't use it for fitting this transformer
+        print(f"Fitting SemanticHighlightScorer...")
+
+        if self.highlights_df.empty:
+            print("Warning: No highlights found in highlights_df. Semantic scores will all be 0.")
             self.liked_phrases = []
             self.disliked_phrases = []
         else:
-            self.liked_phrases = highlights_df[highlights_df['type'] == 'like']['text'].tolist()
-            self.disliked_phrases = highlights_df[highlights_df['type'] == 'dislike']['text'].tolist()
+            self.liked_phrases = self.highlights_df[self.highlights_df['type'] == 'like']['text'].tolist()
+            self.disliked_phrases = self.highlights_df[self.highlights_df['type'] == 'dislike']['text'].tolist()
 
         if not self.liked_phrases and not self.disliked_phrases:
-             print("Warning: No liked or disliked phrases found. Semantic scores will all be 0.")
+             print("Warning: No liked or disliked phrases found after filtering highlights_df. Semantic scores will all be 0.")
         
-        print(f"Loading sentence transformer model '{model_name}'... (This may take a moment)")
-        self.model = SentenceTransformer(model_name)
-        print("Model loaded.")
-        
-        print(f"Encoding {len(self.liked_phrases)} 'like' and {len(self.disliked_phrases)} 'dislike' phrases...")
-        
-        # Create embeddings for all highlight phrases
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.model.to(self.device)
-        print(f"Using device: {self.device}")
-
-        if self.liked_phrases:
-            self.liked_embeddings = self.model.encode(self.liked_phrases, convert_to_tensor=True, device=self.device)
-        else:
-            self.liked_embeddings = torch.tensor([], device=self.device)
-
-        if self.disliked_phrases:
-            self.disliked_embeddings = self.model.encode(self.disliked_phrases, convert_to_tensor=True, device=self.device)
-        else:
-            self.disliked_embeddings = torch.tensor([], device=self.device)
+        # Only load the model and encode if there are phrases to encode
+        if self.liked_phrases or self.disliked_phrases:
+            print(f"Loading sentence transformer model '{self.model_name}'... (This may take a moment)")
+            self.model = SentenceTransformer(self.model_name)
+            print("Model loaded.")
             
-        print("Highlight phrases encoded and stored.")
+            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.model.to(self.device)
+            print(f"Using device: {self.device}")
 
-    def fit(self, X, y=None):
-        # Nothing to fit, embeddings were created in __init__
+            print(f"Encoding {len(self.liked_phrases)} 'like' and {len(self.disliked_phrases)} 'dislike' phrases...")
+            if self.liked_phrases:
+                self.liked_embeddings = self.model.encode(self.liked_phrases, convert_to_tensor=True, device=self.device)
+            
+            if self.disliked_phrases:
+                self.disliked_embeddings = self.model.encode(self.disliked_phrases, convert_to_tensor=True, device=self.device)
+                
+            print("Highlight phrases encoded and stored.")
+        else:
+            print("No phrases to encode. Semantic model will not be loaded.")
+
         return self
 
     def transform(self, X, y=None):
         # X is expected to be a pandas Series of job descriptions
         print(f"Generating semantic embeddings for {len(X)} job descriptions...")
         
+        # If no model was loaded (because no highlights were found), return zeros
+        if self.model is None:
+            print("No semantic model loaded (no highlights found). Returning zero scores.")
+            return np.zeros((len(X), 2)) # Return a 2-column array of zeros
+
         # Ensure descriptions are strings
         descriptions = X.fillna('').tolist()
         
@@ -348,7 +360,7 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
         # Calculate cosine similarity
         
         # --- Liked Scores ---
-        if self.liked_embeddings.nelement() > 0:
+        if self.liked_embeddings is not None and self.liked_embeddings.nelement() > 0:
             # Compare all descriptions to all liked phrases
             liked_sims = util.cos_sim(desc_embeddings, self.liked_embeddings)
             # Find the *best* match for each description
@@ -358,7 +370,7 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
             max_liked_scores = torch.zeros(len(X), device=self.device)
             
         # --- Disliked Scores ---
-        if self.disliked_embeddings.nelement() > 0:
+        if self.disliked_embeddings is not None and self.disliked_embeddings.nelement() > 0:
             # Compare all descriptions to all disliked phrases
             disliked_sims = util.cos_sim(desc_embeddings, self.disliked_embeddings)
             # Find the *best* match for each description
@@ -400,17 +412,7 @@ def main():
 
     # --- Define Preprocessing Steps ---
     
-    # Transformer for 'title_rating'
-    # Input: DataFrame, Output: (n, 1) array
-    title_transformer = Pipeline(steps=[
-        ('transform', TitleRatingTransformer())
-    ])
-
-    # Transformer for 'skills'
-    # Input: DataFrame, Output: (n, 3) array
-    skills_transformer = Pipeline(steps=[
-        ('transform', SkillFeaturesTransformer())
-    ])
+    # Note: We instantiate transformers directly. No need for extra Pipeline wrappers here.
     
     # Transformer for 'job_description' using TF-IDF
     # Input: Series, Output: (n, vocab_size) sparse matrix
@@ -437,13 +439,16 @@ def main():
     preprocessor = ColumnTransformer(
         transformers=[
             # (name, transformer_object, columns_to_apply_to)
-            ('title', title_transformer, ['title_rating']),
-            ('skills', skills_transformer, ['skills']),
+            ('title', TitleRatingTransformer(), ['title_rating']),
+            ('skills', SkillFeaturesTransformer(), ['skills']),
             ('tfidf', description_tfidf, 'job_description'),
             ('highlights', description_highlights, 'job_description')
         ],
         remainder='drop', # Drop any columns not specified
-        n_jobs=-1 # Use all available CPU cores
+        # n_jobs=-1 # <-- THIS was the problem.
+        # Disabling parallel processing as it can cause issues with
+        # complex objects like the sentence transformer model.
+        n_jobs=None
     )
 
     # Note: For now, the pipeline *is* the preprocessor.
@@ -499,4 +504,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
