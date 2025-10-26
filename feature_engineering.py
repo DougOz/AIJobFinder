@@ -41,7 +41,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 # --- Custom Transformers ---
 # Import our custom classes from their own file
-from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer
+from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer, PrecomputedHighlightTransformer
 
 
 # --- CONFIGURATION ---
@@ -141,7 +141,16 @@ def load_data():
             # Fetch the corresponding job data from 'dice_jobs'
             job_doc = jobs_col.find_one(
                 {"_id": job_object_id}, # <-- Use the ObjectId here
-                {"description": 1, "skills": 1, "title": 1, "semantic_score_v2": 1} # Fetch all needed fields
+                {
+                    "description": 1, 
+                    "skills": 1, 
+                    "title": 1, 
+                    "semantic_score_v2": 1,
+                    "semantic_max_liked": 1, # <-- Fetch pre-computed score
+                    "semantic_mean_liked": 1, # <-- Fetch pre-computed score
+                    "semantic_max_disliked": 1, # <-- Fetch pre-computed score
+                    "semantic_mean_disliked": 1 # <-- Fetch pre-computed score
+                }
             )
             
             if not job_doc:
@@ -179,7 +188,11 @@ def load_data():
                 "job_description": job_doc.get('description'),
                 "title_rating": job_title_rating, # This is the rated value (or None)
                 "skills": assembled_skills, # This is the new list of skill objects
-                "semantic_score_v2": job_doc.get('semantic_score_v2') # Add the new score
+                "semantic_score_v2": job_doc.get('semantic_score_v2'), # Add the new score
+                "semantic_max_liked": job_doc.get('semantic_max_liked'), # Add pre-computed score
+                "semantic_mean_liked": job_doc.get('semantic_mean_liked'), # Add pre-computed score
+                "semantic_max_disliked": job_doc.get('semantic_max_disliked'), # Add pre-computed score
+                "semantic_mean_disliked": job_doc.get('semantic_mean_disliked') # Add pre-computed score
             }
 
             # Append to the correct list
@@ -256,10 +269,6 @@ def main():
         ngram_range=(1, 2)  # Use 1- and 2-word phrases
     )
     
-    # Transformer for 'job_description' using Highlights (Solution B - Semantic)
-    # Input: Series, Output: (n, 2) array
-    description_highlights = SemanticHighlightScorer(highlights_df=highlights_df, model_name=SEMANTIC_MODEL_NAME)
-
     
     # --- Use ColumnTransformer to Apply Steps ---
     # This applies the correct transformer to the correct column
@@ -272,7 +281,12 @@ def main():
             ('semantic_v2', SemanticScoreV2Transformer(), ['semantic_score_v2']),
             ('skills', SkillFeaturesTransformer(), ['skills']),
             ('tfidf', description_tfidf, 'job_description'),
-            ('highlights', description_highlights, 'job_description')
+            # --- MODIFICATION ---
+            # Use the new, fast transformer that just selects pre-computed columns
+            ('highlights', PrecomputedHighlightTransformer(), [
+                'semantic_max_liked', 'semantic_mean_liked', 
+                'semantic_max_disliked', 'semantic_mean_disliked'
+            ])
         ],
         remainder='drop',
         n_jobs=None, # Keep parallel processing off for stability

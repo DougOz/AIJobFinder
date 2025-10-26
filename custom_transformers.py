@@ -2,8 +2,8 @@
 This module contains custom scikit-learn compatible transformers
 for the job matching model pipeline.
 """
-from scipy.sparse import csr_matrix
 
+from scipy.sparse import csr_matrix
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -34,29 +34,9 @@ class TitleRatingTransformer(BaseEstimator, TransformerMixin):
         # .values returns numpy array, .reshape(-1, 1) makes it a single column
         dense_output = X['title_rating'].fillna(self.neutral_value).values.reshape(-1, 1)
         return csr_matrix(dense_output)
-    
+
     def get_feature_names_out(self, input_features=None):
         return ['title_rating']
-
-
-class SemanticScoreV2Transformer(BaseEstimator, TransformerMixin):
-    """
-    Transforms the 'semantic_score_v2' column.
-    Missing values are imputed with 0.0.
-    """
-    def __init__(self, default_value=0.0):
-        self.default_value = default_value
-        
-    def fit(self, X, y=None):
-        return self # Nothing to fit
-        
-    def transform(self, X, y=None):
-        # X is expected to be a DataFrame
-        dense_output = X['semantic_score_v2'].fillna(self.default_value).values.reshape(-1, 1)
-        return csr_matrix(dense_output)
-    
-    def get_feature_names_out(self, input_features=None):
-        return ['semantic_score_v2']
 
 
 class SkillFeaturesTransformer(BaseEstimator, TransformerMixin):
@@ -198,8 +178,12 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
             max_disliked_scores = torch.zeros(len(X), device=self.device)
             mean_disliked_scores = torch.zeros(len(X), device=self.device)
             
-        # Combine scores into a 4-column array
-        scores = np.array(list(zip(max_liked_scores.cpu().numpy(), mean_liked_scores.cpu().numpy(), max_disliked_scores.cpu().numpy(), mean_disliked_scores.cpu().numpy())))
+        # Combine scores into a 4-column array.
+        # The .cpu().numpy() calls are deferred until they are needed for stacking.
+        scores = np.column_stack([
+            max_liked_scores.cpu().numpy(), mean_liked_scores.cpu().numpy(),
+            max_disliked_scores.cpu().numpy(), mean_disliked_scores.cpu().numpy()
+        ])
         
         print("Semantic scores calculated.")
         return csr_matrix(scores)

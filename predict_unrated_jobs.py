@@ -30,7 +30,7 @@ from bson.objectid import ObjectId
 # Import custom functions and constants
 from mongodb_functions import connect_to_mongodb, DATABASE_NAME
 # This import is crucial! It makes the custom transformer classes available to joblib.
-from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer
+from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer, PrecomputedHighlightTransformer
 
 # --- CONFIGURATION ---
 DICE_JOBS_COLLECTION = "dice_jobs"
@@ -78,7 +78,16 @@ def get_unrated_jobs_data(db):
     # 3. Find all jobs that are NOT in the rated set
     unrated_jobs_cursor = db[DICE_JOBS_COLLECTION].find(
         {"_id": {"$nin": list(rated_job_ids)}},
-        {"description": 1, "skills": 1, "title": 1, "semantic_score_v2": 1}
+        {
+            "description": 1, 
+            "skills": 1, 
+            "title": 1, 
+            "semantic_score_v2": 1,
+            "semantic_max_liked": 1,
+            "semantic_mean_liked": 1,
+            "semantic_max_disliked": 1,
+            "semantic_mean_disliked": 1
+        }
     )
 
     prediction_data = []
@@ -105,7 +114,11 @@ def get_unrated_jobs_data(db):
             "job_description": job_doc.get('description', ''),
             "title_rating": job_title_rating,
             "skills": assembled_skills,
-            "semantic_score_v2": job_doc.get('semantic_score_v2')
+            "semantic_score_v2": job_doc.get('semantic_score_v2'),
+            "semantic_max_liked": job_doc.get('semantic_max_liked'),
+            "semantic_mean_liked": job_doc.get('semantic_mean_liked'),
+            "semantic_max_disliked": job_doc.get('semantic_max_disliked'),
+            "semantic_mean_disliked": job_doc.get('semantic_mean_disliked')
         })
 
     if not prediction_data:
@@ -190,4 +203,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
