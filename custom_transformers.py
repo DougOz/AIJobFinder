@@ -39,6 +39,26 @@ class TitleRatingTransformer(BaseEstimator, TransformerMixin):
         return ['title_rating']
 
 
+class SemanticScoreV2Transformer(BaseEstimator, TransformerMixin):
+    """
+    Transforms the 'semantic_score_v2' column.
+    Missing values are imputed with 0.0.
+    """
+    def __init__(self, default_value=0.0):
+        self.default_value = default_value
+        
+    def fit(self, X, y=None):
+        return self # Nothing to fit
+        
+    def transform(self, X, y=None):
+        # X is expected to be a DataFrame
+        dense_output = X['semantic_score_v2'].fillna(self.default_value).values.reshape(-1, 1)
+        return csr_matrix(dense_output)
+    
+    def get_feature_names_out(self, input_features=None):
+        return ['semantic_score_v2']
+
+
 class SkillFeaturesTransformer(BaseEstimator, TransformerMixin):
     """
     Transforms the 'skills' column (a list of skill objects) into three features:

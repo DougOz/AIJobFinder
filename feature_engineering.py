@@ -41,7 +41,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 # --- Custom Transformers ---
 # Import our custom classes from their own file
-from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer
+from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer
 
 
 # --- CONFIGURATION ---
@@ -141,7 +141,7 @@ def load_data():
             # Fetch the corresponding job data from 'dice_jobs'
             job_doc = jobs_col.find_one(
                 {"_id": job_object_id}, # <-- Use the ObjectId here
-                {"description": 1, "skills": 1, "title": 1} # Fetch all needed fields
+                {"description": 1, "skills": 1, "title": 1, "semantic_score_v2": 1} # Fetch all needed fields
             )
             
             if not job_doc:
@@ -178,7 +178,8 @@ def load_data():
                 "data_set": rating_doc.get('data_set'),
                 "job_description": job_doc.get('description'),
                 "title_rating": job_title_rating, # This is the rated value (or None)
-                "skills": assembled_skills # This is the new list of skill objects
+                "skills": assembled_skills, # This is the new list of skill objects
+                "semantic_score_v2": job_doc.get('semantic_score_v2') # Add the new score
             }
 
             # Append to the correct list
@@ -268,6 +269,7 @@ def main():
         transformers=[
             # (name, transformer_object, columns_to_apply_to)
             ('title', TitleRatingTransformer(), ['title_rating']),
+            ('semantic_v2', SemanticScoreV2Transformer(), ['semantic_score_v2']),
             ('skills', SkillFeaturesTransformer(), ['skills']),
             ('tfidf', description_tfidf, 'job_description'),
             ('highlights', description_highlights, 'job_description')

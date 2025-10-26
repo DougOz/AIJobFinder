@@ -129,21 +129,23 @@ def plot_diagnostics(y_val, y_pred, model_name):
     Generates and saves diagnostic plots:
     1. Histogram of actual ratings
     2. Scatter plot of Predictions vs. Actuals
+    3. Residuals Plot (Errors vs. Predicted Values)
     """
     print(f"\nGenerating diagnostic plots for {model_name}...")
     
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(18, 6))
     
     # 1. Histogram of actual ratings
-    plt.subplot(1, 2, 1)
+    plt.subplot(1, 3, 1)
     plt.hist(y_val, bins=np.arange(0.5, 9.5, 1), edgecolor='black')
     plt.title('Distribution of Your Ratings (Validation Set)')
     plt.xlabel('Actual Rating')
     plt.ylabel('Count of Jobs')
     plt.xticks(range(1, 9))
+    plt.grid(axis='y', alpha=0.5)
     
     # 2. Scatter plot of Predictions vs. Actuals
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2)
     plt.scatter(y_val, y_pred, alpha=0.5)
     
     # Add a 1:1 line (perfect prediction)
@@ -155,6 +157,16 @@ def plot_diagnostics(y_val, y_pred, model_name):
     plt.xlabel('Actual Rating')
     plt.ylabel('Predicted Rating')
     plt.legend()
+    plt.grid(True)
+    
+    # 3. Residuals Plot
+    plt.subplot(1, 3, 3)
+    residuals = y_val - y_pred
+    plt.scatter(y_pred, residuals, alpha=0.5)
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.title(f'{model_name}: Residuals Plot')
+    plt.xlabel('Predicted Rating')
+    plt.ylabel('Prediction Error (Actual - Predicted)')
     plt.grid(True)
     
     plt.tight_layout()
@@ -249,8 +261,8 @@ def main():
         param_grid = {
             'learning_rate': [0.05, 0.1], # Keep learning rate in the grid
             'num_leaves': [15, 20, 31],
-            'reg_alpha': [0.1, 0.5, 1.0], # L1 regularization
-            'reg_lambda': [0.1, 0.5, 1.0]  # L2 regularization
+            'reg_alpha': [0.1, 0.5, 2], # L1 regularization - increased max
+            'reg_lambda': [0.1, 0.5, 2]  # L2 regularization - increased max
         }
 
         lgbm_estimator = LGBMRegressor(
@@ -311,6 +323,27 @@ def main():
     r2_ridge = evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge)
     trained_models['ridge'] = {'model': ridge_model, 'r2_val': r2_ridge}
 
+    # --- Blended Model ---
+    # If we have both models, let's try blending their predictions
+    if 'lgbm' in trained_models and 'ridge' in trained_models:
+        print("\n\n--- Creating a Blended Model (LGBM + Ridge) ---")
+        # Simple 50/50 average of the two models' predictions
+        # You can experiment with these weights, e.g., 0.6 and 0.4
+        lgbm_weight = 0.5
+        ridge_weight = 0.5
+        y_pred_blended = (y_pred_lgbm * lgbm_weight) + (y_pred_ridge * ridge_weight)
+        
+        # Evaluate the blended predictions
+        r2_blended = evaluate_model(f"Blended Model ({lgbm_weight*100:.0f}% LGBM, {ridge_weight*100:.0f}% Ridge)", y_val, y_pred_blended)
+        
+        # The "blended model" is a dictionary of its components
+        blended_model_obj = {
+            'lgbm_model': trained_models['lgbm']['model'],
+            'ridge_model': trained_models['ridge']['model'],
+            'weights': {'lgbm': lgbm_weight, 'ridge': ridge_weight}
+        }
+        trained_models['blended'] = {'model': blended_model_obj, 'r2_val': r2_blended, 'predictions': y_pred_blended}
+
 
     # 3. Train and evaluate LinearSVR
     print("\nTraining Second Linear-Style Model (LinearSVR)...")
@@ -349,29 +382,39 @@ def main():
     if trained_models:
         # Find the model with the highest validation R-squared
         best_model_name = max(trained_models, key=lambda k: trained_models[k]['r2_val'])
-        best_model_info = trained_models[best_model_name]
-        best_model_obj = best_model_info['model']
+        best_model_data = trained_models[best_model_name]
+        best_model_obj = best_model_data['model']
         
         best_model_filename = "best_model.joblib"
         joblib.dump(best_model_obj, best_model_filename)
         
         print(f"\n--- Best Model Selection ---")
-        print(f"Best performing model on validation set: '{best_model_name.upper()}' (R²: {best_model_info['r2_val']:.4f})")
+        print(f"Best performing model on validation set: '{best_model_name.upper()}' (R²: {best_model_data['r2_val']:.4f})")
         print(f"  > Best model saved to: {best_model_filename}")
 
     
-    # 5. Generate visualizations
+    # 5. Generate visualizations for the best model
     if MATPLOTLIB_INSTALLED:
         print("\n--- Generating Visualizations ---")
         try:
             # Load the fitted pipeline to get feature names
             full_pipeline = joblib.load(PIPELINE_FILE)
             
-            # Plot diagnostics for the best-performing model (LGBM or Ridge)
-            plot_diagnostics(y_val, y_pred_ridge, "Ridge Regression (Baseline)")
+            # Get the predictions for the best model
+            if best_model_name == 'blended':
+                y_pred_best = best_model_data['predictions']
+            else:
+                y_pred_best = best_model_obj.predict(X_val)
             
-            if LGBM_INSTALLED:
-                plot_feature_importances(full_pipeline, lgbm_model, "LightGBM")
+            # Plot diagnostics for the best model
+            plot_diagnostics(y_val, y_pred_best, f"Best Model: {best_model_name.upper()}")
+            
+            # Plot feature importances for the most complex part of the best model
+            if best_model_name == 'blended':
+                # For a blend, show importances of the most complex model (LGBM)
+                plot_feature_importances(full_pipeline, best_model_obj['lgbm_model'], "LightGBM (from Blend)")
+            elif hasattr(best_model_obj, 'feature_importances_'):
+                plot_feature_importances(full_pipeline, best_model_obj, best_model_name.upper())
 
         except FileNotFoundError:
             print(f"ERROR: Could not load '{PIPELINE_FILE}' to generate feature names.")
