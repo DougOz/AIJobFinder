@@ -251,7 +251,7 @@ def main():
     
     description_tfidf = TfidfVectorizer(
         stop_words='english',
-        max_features=5000,  # Limit to top 5k words
+        max_features=5000,  # Restore to 5000 as it performed better
         ngram_range=(1, 2)  # Use 1- and 2-word phrases
     )
     
@@ -272,11 +272,11 @@ def main():
             ('tfidf', description_tfidf, 'job_description'),
             ('highlights', description_highlights, 'job_description')
         ],
-        remainder='drop', # Drop any columns not specified
-        # n_jobs=-1 # <-- THIS was the problem.
-        # Disabling parallel processing as it can cause issues with
-        # complex objects like the sentence transformer model.
-        n_jobs=None
+        remainder='drop',
+        n_jobs=None, # Keep parallel processing off for stability
+        # Force the output to be a sparse matrix, even if density > 0.3
+        # This is the key to fixing the save_npz error.
+        sparse_threshold=1.0
     )
 
     # Note: For now, the pipeline *is* the preprocessor.

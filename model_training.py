@@ -123,6 +123,7 @@ def evaluate_model(model_name, y_val, y_pred):
     print(f"  Root Mean Squared Error (RMSE): {rmse:.4f}")
     print(f"  (MAE means the model's predictions are, on average, +/- {mae:.2f} points from your true score)")
 
+    return r2 # Return R-squared for comparison
 def plot_diagnostics(y_val, y_pred, model_name):
     """
     Generates and saves diagnostic plots:
@@ -211,6 +212,10 @@ def main():
     # The load function now exits on its own if data is not found,
     # so we don't need to check for None here.
 
+    # --- Model Tracking ---
+    # Dictionary to store trained models and their validation scores
+    trained_models = {}
+
     
     if LGBM_INSTALLED:
         print("\nTraining Advanced Model (LightGBM Regressor)...")
@@ -279,7 +284,8 @@ def main():
         evaluate_model("LGBM Regressor (Advanced) - Training", y_train, y_pred_lgbm_train)
 
         # Evaluate
-        evaluate_model("LGBM Regressor (Advanced)", y_val, y_pred_lgbm)
+        r2_lgbm = evaluate_model("LGBM Regressor (Advanced)", y_val, y_pred_lgbm)
+        trained_models['lgbm'] = {'model': lgbm_model, 'r2_val': r2_lgbm}
 
     # 2. Train and evaluate the BASELINE model (Ridge Regression)
     print("\n\n--- Training Baseline Models ---")
@@ -302,7 +308,8 @@ def main():
     evaluate_model("Ridge Regression (Baseline) - Training", y_train, y_pred_ridge_train)
 
     # Evaluate
-    evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge)
+    r2_ridge = evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge)
+    trained_models['ridge'] = {'model': ridge_model, 'r2_val': r2_ridge}
 
 
     # 3. Train and evaluate LinearSVR
@@ -332,12 +339,28 @@ def main():
     evaluate_model("LinearSVR - Training", y_train, y_pred_svr_train)
 
     # Evaluate
-    evaluate_model("LinearSVR", y_val, y_pred_svr)
+    r2_svr = evaluate_model("LinearSVR", y_val, y_pred_svr)
+    trained_models['svr'] = {'model': svr_model, 'r2_val': r2_svr}
 
 
     print("\n--- Model Comparison Complete! ---")
     
-    # 4. Generate visualizations
+    # 4. Save the best model
+    if trained_models:
+        # Find the model with the highest validation R-squared
+        best_model_name = max(trained_models, key=lambda k: trained_models[k]['r2_val'])
+        best_model_info = trained_models[best_model_name]
+        best_model_obj = best_model_info['model']
+        
+        best_model_filename = "best_model.joblib"
+        joblib.dump(best_model_obj, best_model_filename)
+        
+        print(f"\n--- Best Model Selection ---")
+        print(f"Best performing model on validation set: '{best_model_name.upper()}' (R²: {best_model_info['r2_val']:.4f})")
+        print(f"  > Best model saved to: {best_model_filename}")
+
+    
+    # 5. Generate visualizations
     if MATPLOTLIB_INSTALLED:
         print("\n--- Generating Visualizations ---")
         try:

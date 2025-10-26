@@ -2,6 +2,7 @@
 This module contains custom scikit-learn compatible transformers
 for the job matching model pipeline.
 """
+from scipy.sparse import csr_matrix
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -31,8 +32,9 @@ class TitleRatingTransformer(BaseEstimator, TransformerMixin):
         # X is expected to be a DataFrame
         # .fillna() handles None, np.nan, etc.
         # .values returns numpy array, .reshape(-1, 1) makes it a single column
-        return X['title_rating'].fillna(self.neutral_value).values.reshape(-1, 1)
-
+        dense_output = X['title_rating'].fillna(self.neutral_value).values.reshape(-1, 1)
+        return csr_matrix(dense_output)
+    
     def get_feature_names_out(self, input_features=None):
         return ['title_rating']
 
@@ -88,7 +90,8 @@ class SkillFeaturesTransformer(BaseEstimator, TransformerMixin):
             mean_rating = np.mean(ratings) if ratings else self.neutral_value
             features.append([mean_rating, num_expert, num_novice])
             
-        return np.array(features)
+        dense_output = np.array(features)
+        return csr_matrix(dense_output)
 
     def get_feature_names_out(self, input_features=None):
         return ['mean_skill_rating', 'num_expert_skills', 'num_novice_skills']
@@ -152,7 +155,9 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
         print(f"Generating semantic embeddings for {len(X)} job descriptions...")
         if self.model is None:
             print("No semantic model loaded (no highlights found). Returning zero scores.")
-            return np.zeros((len(X), 2))
+            # The output shape must match get_feature_names_out() (4 columns)
+            # and it must be a sparse matrix to be compatible with save_npz.
+            return csr_matrix((len(X), 4))
 
         descriptions = X.fillna('').tolist()
         desc_embeddings = self.model.encode(descriptions, convert_to_tensor=True, device=self.device, show_progress_bar=True)
@@ -177,7 +182,7 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
         scores = np.array(list(zip(max_liked_scores.cpu().numpy(), mean_liked_scores.cpu().numpy(), max_disliked_scores.cpu().numpy(), mean_disliked_scores.cpu().numpy())))
         
         print("Semantic scores calculated.")
-        return scores
+        return csr_matrix(scores)
 
     def get_feature_names_out(self, input_features=None):
         return ['semantic_max_liked', 'semantic_mean_liked', 'semantic_max_disliked', 'semantic_mean_disliked']
