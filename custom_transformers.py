@@ -39,6 +39,25 @@ class TitleRatingTransformer(BaseEstimator, TransformerMixin):
         return ['title_rating']
 
 
+class SemanticScoreV2Transformer(BaseEstimator, TransformerMixin):
+    """
+    Transforms the 'semantic_score_v2' column.
+    Missing values are imputed with 0.0.
+    """
+    def __init__(self, default_value=0.0):
+        self.default_value = default_value
+        
+    def fit(self, X, y=None):
+        return self # Nothing to fit
+        
+    def transform(self, X, y=None):
+        # X is expected to be a DataFrame
+        dense_output = X['semantic_score_v2'].fillna(self.default_value).values.reshape(-1, 1)
+        return csr_matrix(dense_output)
+    
+    def get_feature_names_out(self, input_features=None):
+        return ['semantic_score_v2']
+
 class SkillFeaturesTransformer(BaseEstimator, TransformerMixin):
     """
     Transforms the 'skills' column (a list of skill objects) into three features:
@@ -190,3 +209,24 @@ class SemanticHighlightScorer(BaseEstimator, TransformerMixin):
 
     def get_feature_names_out(self, input_features=None):
         return ['semantic_max_liked', 'semantic_mean_liked', 'semantic_max_disliked', 'semantic_mean_disliked']
+
+
+class PrecomputedHighlightTransformer(BaseEstimator, TransformerMixin):
+    """
+    Selects pre-computed semantic highlight scores from the input DataFrame.
+    This is a fast, lightweight alternative to the SemanticHighlightScorer
+    for use when scores have been pre-calculated and stored in the database.
+    """
+    def __init__(self):
+        self.feature_names = ['semantic_max_liked', 'semantic_mean_liked', 'semantic_max_disliked', 'semantic_mean_disliked']
+
+    def fit(self, X, y=None):
+        return self # Nothing to fit
+
+    def transform(self, X, y=None):
+        # Select the pre-computed columns and fill any missing with 0
+        dense_output = X[self.feature_names].fillna(0).values
+        return csr_matrix(dense_output)
+
+    def get_feature_names_out(self, input_features=None):
+        return self.feature_names
