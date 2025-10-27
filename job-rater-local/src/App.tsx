@@ -102,16 +102,26 @@ const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
     highlightOrder.forEach(type => {
         const highlightsOfType = highlights.filter(h => h.type === type);
         highlightsOfType.forEach(highlight => {
-            // Escape special regex characters from the user's text
-            // --- FIX: Split by whitespace, filter empty strings, and escape each word. ---
-            const words = highlight.text.split(/\s+/).filter(Boolean).map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-            
-            // If there are no words, skip to avoid creating an invalid regex.
-            if (words.length === 0) return;
-            
-            const searchText = words.join('(?:<[^>]+>|\\s)+?');
-            const regex = new RegExp(`(${searchText})`, 'gi');
-            contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$1</span>`);
+            // --- NEW STRATEGY: Highlight line-by-line for important sections ---
+            if (type === 'very_important' || type === 'important') {
+                const lines = highlight.text.split('\n');
+                lines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    // Only process non-empty lines
+                    if (trimmedLine.length > 0) {
+                        // Escape the line for use in the regex
+                        const escapedLine = trimmedLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(escapedLine, 'g');
+                        // Wrap matches in the appropriate span
+                        contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$&</span>`);
+                    }
+                });
+            } else {
+                // --- Existing logic for 'like'/'dislike' which works well for single phrases ---
+                const escapedText = highlight.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(${escapedText})`, 'gi');
+                contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$1</span>`);
+            }
         });
     });
 
@@ -591,7 +601,7 @@ const App = () => {
                 .leading-relaxed { line-height: 1.625; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
                 .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; }
-                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(239, 68, 68, 0.3); } .highlighted-important { background-color: rgba(234, 179, 8, 0.3); font-weight: 600; } .highlighted-very-important { background-color: rgba(249, 115, 22, 0.3); font-weight: 700; }
+                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(153, 27, 27, 0.3); } .highlighted-important { background-color: rgba(234, 179, 8, 0.3); } .highlighted-very-important { background-color: rgba(252, 101, 0, 0.4); font-weight: 700; }
                 #custom-context-menu { position: fixed; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px; }
                 #custom-context-menu button { display: flex; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: 6px; }
                 #custom-context-menu button:hover { background-color: #eef2ff; }
