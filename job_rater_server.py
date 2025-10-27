@@ -38,28 +38,22 @@ DEFAULT_PROFILE_NAME = 'Doug'
 @app.route('/api/jobs', methods=['GET'])
 def get_job_list():
     """
-    Returns a list of all available job IDs (as a JSON array of strings).
+    Returns a list of job IDs for jobs that have already been rated
+    with an overall_score > 0 for the default profile.
     """
-    if jobs_collection is None:
-        return jsonify({"error": "Database 'dice_jobs' collection is unavailable."}), 500
+    if ratings_collection is None:
+        return jsonify({"error": "Database 'job_ratings' collection is unavailable."}), 500
     try:
-        job_ids = [str(job['_id']) for job in jobs_collection.find({"is_active": True}, {'_id': 1})]
-
-        # Filter job_ids to only include those with populated notes in ratings_collection
-        if ratings_collection is not None:
-            # Find job_ids from ratings_collection where notes are not empty
-            # We use $ne (not equal) to filter out both None and empty strings.
-            job_ids_with_populated_notes_cursor = ratings_collection.find(
-                {"profile_name": DEFAULT_PROFILE_NAME, "notes": {"$ne": None, "$ne": ""}},
-                {"job_id": 1, "_id": 0} # Project only job_id, exclude _id
-            )
-            job_ids_with_populated_notes = {doc['job_id'] for doc in job_ids_with_populated_notes_cursor}
-
-            # Filter the initial list of job_ids
-            job_ids = [job_id for job_id in job_ids if job_id in job_ids_with_populated_notes]
-        else:
-            print("WARNING: ratings_collection is unavailable, cannot filter by populated notes.")
-
+        # --- MODIFICATION: Fetch rated jobs instead of all jobs ---
+        query = {
+            "profile_name": DEFAULT_PROFILE_NAME,
+            "overall_score": {"$gt": 0}
+        }
+        # Project only the job_id field and exclude the MongoDB _id field.
+        rated_jobs_cursor = ratings_collection.find(query, {"job_id": 1, "_id": 0})
+        job_ids = [doc['job_id'] for doc in rated_jobs_cursor]
+        # --- END MODIFICATION ---
+        
         #random.shuffle(job_ids)
         if not job_ids:
             print(f"MongoDB '{jobs_collection.name}' collection is empty or no jobs match the filter.")
@@ -86,6 +80,11 @@ def get_job_data(job_id):
         job_details['job_id'] = job_details.pop('_id')
         job_id_str = job_details['job_id']
 
+        # --- FIX: Add a lowercase version of the title for consistent rating lookups ---
+        if 'title' in job_details and job_details['title']:
+            job_details['title_lowercase'] = job_details['title'].lower()
+        # --- END FIX ---
+
         existing_rating = ratings_collection.find_one({
             "job_id": job_id_str,
             "profile_name": DEFAULT_PROFILE_NAME
@@ -93,16 +92,20 @@ def get_job_data(job_id):
 
         job_skills = job_details.get('skills', [])
         skill_proficiencies = []
-        for skill_name in job_skills:
-            proficiency_doc = skills_collection.find_one({
+        if job_skills:
+            # --- OPTIMIZATION: Fetch all skill proficiencies in a single query ---
+            proficiency_cursor = skills_collection.find({
                 "profile_name": DEFAULT_PROFILE_NAME,
-                "skill_name": skill_name
+                "skill_name": {"$in": job_skills}
             })
-            user_rating = proficiency_doc.get('user_rating', 0) if proficiency_doc else 0
-            skill_proficiencies.append({
-                "skill_name": skill_name,
-                "user_rating": user_rating
-            })
+            proficiencies_map = {doc['skill_name']: doc.get('user_rating', 0) for doc in proficiency_cursor}
+
+            for skill_name in job_skills:
+                skill_proficiencies.append({
+                    "skill_name": skill_name,
+                    "user_rating": proficiencies_map.get(skill_name, 0)
+                })
+        # --- END OPTIMIZATION ---
 
         response_data = {
             "job_details": job_details,
@@ -175,8 +178,30 @@ def get_title_ratings():
     if title_ratings_collection is None:
         return jsonify({"error": "Title ratings collection is unavailable."}), 500
     try:
-        ratings_cursor = title_ratings_collection.find({"profile_name": DEFAULT_PROFILE_NAME})
-        ratings_dict = {doc['title']: doc['rating'] for doc in ratings_cursor}
+        # --- FIX: Use aggregation to handle duplicate titles and allow disk use for large datasets ---
+        # This pipeline ensures we get the most recent rating for each unique, case-insensitive title.
+        pipeline = [
+            {
+                "$match": {"profile_name": DEFAULT_PROFILE_NAME}
+            },
+            {
+                # Sort by last_updated to ensure we keep the most recent rating.
+                "$sort": {"last_updated": -1}
+            },
+            {
+                # Group by the lowercase title, taking the first (most recent) rating.
+                "$group": {
+                    "_id": {"$toLower": "$title"},
+                    "rating": {"$first": "$rating"}
+                }
+            }
+        ]
+        # allowDiskUse=True prevents aggregation from failing silently on large datasets
+        # that exceed the 100MB memory limit.
+        ratings_cursor = title_ratings_collection.aggregate(pipeline, allowDiskUse=True)
+        ratings_dict = {doc['_id']: doc['rating'] for doc in ratings_cursor}
+        # --- DEBUG: Log the number of ratings being sent ---
+        print(f"DEBUG: Found {len(ratings_dict)} unique title ratings to send to the frontend.")
         return jsonify(ratings_dict)
     except Exception as e:
         print(f"Error fetching title ratings: {e}")
@@ -199,7 +224,7 @@ def save_title_rating():
         
         timestamp = datetime.datetime.utcnow().isoformat()
         title_ratings_collection.update_one(
-            {"profile_name": DEFAULT_PROFILE_NAME, "title": title},
+            {"profile_name": DEFAULT_PROFILE_NAME, "title": title.lower()},
             {"$set": {"rating": rating, "last_updated": timestamp}},
             upsert=True
         )

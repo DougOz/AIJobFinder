@@ -1,0 +1,78 @@
+def evaluate_model(model_name, y_val, y_pred):
+    """
+    Calculates and prints evaluation metrics for a model.
+    """
+    mae = mean_absolute_error(y_val, y_pred)
+    medae = median_absolute_error(y_val, y_pred) # <-- ADDED
+    rmse = np.sqrt(mean_squared_error(y_val, y_pred))
+    r2 = r2_score(y_val, y_pred) # <-- ADDED
+    
+    print(f"\n--- Results for: {model_name} ---")
+    print(f"  R-squared (R²):               {r2:.4f}")
+    print(f"  Mean Absolute Error (MAE):    {mae:.4f}")
+    print(f"  Median Absolute Error (MedAE): {medae:.4f}") # <-- ADDED
+    print(f"  Root Mean Squared Error (RMSE): {rmse:.4f}")
+    print(f"  (MAE means the model's predictions are, on average, +/- {mae:.2f} points from your true score)")
+
+--- Results for: LGBM Regressor (Advanced) - Training ---
+  R-squared (R²):               0.9413
+  Mean Absolute Error (MAE):    0.2703
+  Median Absolute Error (MedAE): 0.2017
+  Root Mean Squared Error (RMSE): 0.3728
+  (MAE means the model's predictions are, on average, +/- 0.27 points from your true score)
+
+--- Results for: LGBM Regressor (Advanced) ---
+  R-squared (R²):               0.5110
+  Mean Absolute Error (MAE):    0.8426
+  Median Absolute Error (MedAE): 0.6720
+  Root Mean Squared Error (RMSE): 1.0784
+  (MAE means the model's predictions are, on average, +/- 0.84 points from your true score)
+
+
+--- Training Baseline Models ---
+Training Baseline Model (Ridge Regression)...
+  > Training complete in 0.18 seconds.
+
+--- Results for: Ridge Regression (Baseline) - Training ---
+  R-squared (R²):               0.8065
+  Mean Absolute Error (MAE):    0.5197
+  Median Absolute Error (MedAE): 0.4144
+  Root Mean Squared Error (RMSE): 0.6767
+  (MAE means the model's predictions are, on average, +/- 0.52 points from your true score)
+
+--- Results for: Ridge Regression (Baseline) ---
+  R-squared (R²):               0.5009
+  Mean Absolute Error (MAE):    0.8551
+  Median Absolute Error (MedAE): 0.7197
+  Root Mean Squared Error (RMSE): 1.0894
+  (MAE means the model's predictions are, on average, +/- 0.86 points from your true score)
+
+
+--- Creating a Blended Model (LGBM + Ridge) ---
+
+--- Results for: Blended Model (50% LGBM, 50% Ridge) ---
+  R-squared (R²):               0.5379
+  Mean Absolute Error (MAE):    0.8228
+  Median Absolute Error (MedAE): 0.6651
+  Root Mean Squared Error (RMSE): 1.0483
+  (MAE means the model's predictions are, on average, +/- 0.82 points from your true score)
+
+Training Second Linear-Style Model (LinearSVR)...
+f:\JobFinder\AIJobFinder\env1\Lib\site-packages\sklearn\svm\_base.py:1250: ConvergenceWarning: Liblinear failed to converge, increase the number of iterations.
+  warnings.warn(
+  > Training complete in 0.73 seconds.
+
+--- Results for: LinearSVR - Training ---
+  R-squared (R²):               0.7499
+  Mean Absolute Error (MAE):    0.3804
+  Median Absolute Error (MedAE): 0.0319
+  Root Mean Squared Error (RMSE): 0.7693
+  (MAE means the model's predictions are, on average, +/- 0.38 points from your true score)
+--- Results for: LinearSVR ---
+  R-squared (R²):               0.4796
+  Mean Absolute Error (MAE):    0.8486
+  Median Absolute Error (MedAE): 0.6252
+  Root Mean Squared Error (RMSE): 1.1124
+  (MAE means the model's predictions are, on average, +/- 0.85 points from your true score)
+
+--- Model Comparison Complete! ---

@@ -84,16 +84,37 @@ const formatDescription = (text) => {
 
 
 const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
-    let contentHtml = descriptionHtml;
-    if (!contentHtml) {
+    if (!descriptionHtml) {
         return { __html: '<p class="color-red-600">Job description not available.</p>' };
     }
-    highlights.forEach(highlight => {
-        const escapedHighlight = highlight.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escapedHighlight})`, 'gi');
-        const highlightClass = highlight.type === 'like' ? 'highlighted-like' : 'highlighted-dislike';
-        contentHtml = contentHtml.replace(regex, `<span class="${highlightClass}">$1</span>`);
+
+    let contentHtml = descriptionHtml;
+
+    // --- FIX: Apply highlights in a specific order to allow for nesting ---
+    const highlightOrder = ['very_important', 'important', 'like', 'dislike'];
+    const classMap = {
+        'very_important': 'highlighted-very-important',
+        'important': 'highlighted-important',
+        'like': 'highlighted-like',
+        'dislike': 'highlighted-dislike'
+    };
+
+    highlightOrder.forEach(type => {
+        const highlightsOfType = highlights.filter(h => h.type === type);
+        highlightsOfType.forEach(highlight => {
+            // Escape special regex characters from the user's text
+            // --- FIX: Split by whitespace, filter empty strings, and escape each word. ---
+            const words = highlight.text.split(/\s+/).filter(Boolean).map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            
+            // If there are no words, skip to avoid creating an invalid regex.
+            if (words.length === 0) return;
+            
+            const searchText = words.join('(?:<[^>]+>|\\s)+?');
+            const regex = new RegExp(`(${searchText})`, 'gi');
+            contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$1</span>`);
+        });
     });
+
     return { __html: contentHtml };
 };
 
@@ -106,6 +127,8 @@ const FloppyDiskIcon = ({ className }) => (<svg className={className} xmlns="htt
 const LinkIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.586 13.414a1 1 0 01-1.414 1.414 5 5 0 01-7.07-7.071 1 1 0 011.414-1.414 3 3 0 004.242 4.242l1.414-1.414a1 1 0 011.414 1.414zm2.828-2.828a1 1 0 011.414-1.414 5 5 0 017.07 7.071 1 1 0 11-1.414 1.414 3 3 0 00-4.242-4.242l-1.414 1.414a1 1 0 01-1.414-1.414z" /></svg>);
 const ThumbUpIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 7h-6.31l.95-4.57.03-.32a1.5 1.5 0 00-1.5-1.5L12 2l-1.36 6.36L9 12v9h9l1.34-6.68L21 7zM3 12h4v9H3z" /></svg>);
 const ThumbDownIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17h6.31l-.95 4.57-.03.32a1.5 1.5 0 001.5 1.5L12 22l1.36-6.36L15 12V3H6l-1.34 6.68L3 17zm18 0h-4V8h4v9z" /></svg>);
+const StarIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>);
+const FireIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 2c-1.94 0-3.5 1.56-3.5 3.5 0 1.54 1 2.84 2.38 3.34-1.38.5-2.38 1.8-2.38 3.34 0 1.94 1.56 3.5 3.5 3.5s3.5-1.56 3.5-3.5c0-1.54-1-2.84-2.38-3.34 1.38-.5 2.38-1.8 2.38-3.34C21 3.56 19.44 2 17.5 2zm-11 11c-1.94 0-3.5 1.56-3.5 3.5S4.56 20 6.5 20s3.5-1.56 3.5-3.5-1.56-3.5-3.5-3.5zM12 2c-1.94 0-3.5 1.56-3.5 3.5S10.06 9 12 9s3.5-1.56 3.5-3.5S13.94 2 12 2z" /></svg>);
 const ArrowLeftIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 19l-7-7 7-7v4h11v6H10v4z" /></svg>);
 const ArrowRightIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 5l7 7-7 7v-4H3v-6h11V5z" /></svg>);
 const EyeIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-10c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z" /></svg>);
@@ -178,13 +201,15 @@ const App = () => {
 
     const fetchJobDetails = useCallback(async (jobIdToFetch) => {
         if (!jobIdToFetch) return;
-        setDescriptionView('live');
         setJobData({}); setRatedSkills([]); setHighlights([]); setNotes(''); setOverallScore(0); setReviewLater(false);
         setIsLoading(true);
         try {
             const response = await fetch(`${API_BASE}/job/${jobIdToFetch}`);
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}.`);
             const data = await response.json();
+
+            // --- FIX: Default to 'formatted' view if html_description is missing ---
+            setDescriptionView(data.job_details?.html_description ? 'live' : 'formatted');
 
             const fetchedData = {
                 overallScore: data.user_overall_score || 0,
@@ -203,7 +228,7 @@ const App = () => {
 
             setOriginalJobState({
                 ...fetchedData,
-                titleRating: titleRatings[data.job_details?.title] || 0,
+                titleRating: titleRatings[data.job_details?.title?.toLowerCase()] || 0,
             });
             setIsDirty(false);
 
@@ -233,7 +258,7 @@ const App = () => {
 
             const newOriginalState = {
                 overallScore, notes, highlights, ratedSkills, reviewLater,
-                titleRating: titleRatings[jobDetails.title] || 0,
+                titleRating: titleRatings[jobDetails.title?.toLowerCase()] || 0,
             };
             setOriginalJobState(newOriginalState);
             setIsDirty(false);
@@ -253,6 +278,7 @@ const App = () => {
             const response = await fetch(`${API_BASE}/titles/ratings`);
             if (!response.ok) throw new Error('Failed to fetch title ratings');
             const data = await response.json();
+            console.log("1. Fetched Title Ratings:", data); // <-- DEBUG LOG
             setTitleRatings(data);
         } catch (error) {
             console.error("Error fetching title ratings:", error);
@@ -261,6 +287,7 @@ const App = () => {
     }, []);
 
     const saveTitleRating = async (title, rating) => {
+        console.log(`Saving title rating: '${title}' as ${rating}`); // <-- DEBUG LOG
         try {
             const response = await fetch(`${API_BASE}/titles/rate`, {
                 method: 'POST',
@@ -268,7 +295,7 @@ const App = () => {
                 body: JSON.stringify({ title, rating }),
             });
             if (!response.ok) throw new Error('Failed to save title rating');
-            setTitleRatings(prev => ({ ...prev, [title]: rating }));
+            setTitleRatings(prev => ({ ...prev, [title.toLowerCase()]: rating }));
         } catch (error) {
             console.error("Error saving title rating:", error);
             showMessage('Error', 'Failed to save title rating.');
@@ -332,11 +359,13 @@ const App = () => {
 
     useEffect(() => {
         if (jobIds.length > 0 && currentJobId) {
+            // This effect will now re-run if titleRatings changes, ensuring
+            // that the job details are processed with the latest ratings.
             fetchJobDetails(currentJobId);
         } else if (jobIds.length === 0 && !isLoading) {
             showMessage('Notice', 'Job list is empty.');
         }
-    }, [currentJobId, jobIds]);
+    }, [currentJobId, jobIds, fetchJobDetails]); // fetchJobDetails depends on titleRatings
 
     useEffect(() => {
         if (jobIds.length > 0) {
@@ -353,7 +382,7 @@ const App = () => {
             highlights: highlights,
             ratedSkills: ratedSkills,
             reviewLater: reviewLater,
-            titleRating: titleRatings[jobDetails.title] || 0
+            titleRating: titleRatings[jobDetails.title?.toLowerCase()] || 0
         };
 
         // Deep but order-agnostic comparison for arrays of objects
@@ -489,7 +518,14 @@ const App = () => {
         <ul id="highlights-list" className="list-disc list-inside space-y-1 text-sm color-gray-600">
             {highlights.length === 0 ? <li className="color-gray-400 list-none">No highlights saved.</li> : highlights.map((h, i) => (
                 <li key={i} className="flex items-start justify-between">
-                    <span className="font-semibold mr-2 flex items-center"><span className={`w-2 h-2 rounded-full mr-2 ${h.type === 'like' ? 'bg-green-500' : 'bg-red-500'}`}></span>{h.text}</span>
+                    <span className="font-semibold mr-2 flex items-center">
+                        <span className={`w-2 h-2 rounded-full mr-2 ${
+                            h.type === 'like' ? 'bg-green-500' :
+                            h.type === 'dislike' ? 'bg-red-500' :
+                            h.type === 'very_important' ? 'bg-orange-500' :
+                            'bg-yellow-500' // Default for 'important'
+                        }`}></span>
+                        {h.text}</span>
                     <button onClick={() => removeHighlight(h.text)} className="color-red-600 hover:color-red-800 text-xs flex-shrink-0 delete-btn" title="Remove">🗑️</button>
                 </li>
             ))}
@@ -504,7 +540,7 @@ const App = () => {
                 :root {
                     --color-indigo: #4f46e5; --color-indigo-hover: #4338ca; --color-gray-800: #1f2937;
                     --color-gray-700: #374151; --color-gray-600: #4b5563; --color-gray-500: #6b7280;
-                    --color-gray-400: #9ca3af; --color-gray-300: #d1d5db; --color-gray-200: #e5e7eb;
+                    --color-gray-400: #9ca3af; --color-gray-300: #d1d5db; --color-gray-200: #e5e7eb; --color-yellow-500: #eab308;
                     --color-red-600: #dc2626; --color-red-800: #991b1b;
                     --color-yellow-600: #ca8a04; --color-green-600: #059669; --color-orange-500: #f97316;
                 }
@@ -555,7 +591,7 @@ const App = () => {
                 .leading-relaxed { line-height: 1.625; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
                 .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; }
-                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(239, 68, 68, 0.3); }
+                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(239, 68, 68, 0.3); } .highlighted-important { background-color: rgba(234, 179, 8, 0.3); font-weight: 600; } .highlighted-very-important { background-color: rgba(249, 115, 22, 0.3); font-weight: 700; }
                 #custom-context-menu { position: fixed; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px; }
                 #custom-context-menu button { display: flex; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: 6px; }
                 #custom-context-menu button:hover { background-color: #eef2ff; }
@@ -569,14 +605,19 @@ const App = () => {
             <header className="sticky top-0 app-header shadow-md p-2 z-50">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center flex-grow min-w-0" style={{ flexBasis: '50%' }}>
+                        {/* --- DEBUG LOG --- */}
+                        {jobDetails.title_lowercase && console.log(`2. Trying to find rating for key: '${jobDetails.title_lowercase}' in titleRatings. Found:`, titleRatings[jobDetails.title_lowercase])}
+                        {jobDetails.title && !jobDetails.title_lowercase && console.warn("3. WARNING: jobDetails.title exists but jobDetails.title_lowercase is missing!")}
+                        {/* --- END DEBUG LOG --- */}
+
                         {jobDetails.title && (
                             <select
-                                value={titleRatings[jobDetails.title] || 0}
+                                value={titleRatings[jobDetails.title_lowercase] || 0}
                                 onChange={(e) => saveTitleRating(jobDetails.title, parseInt(e.target.value))}
                                 className="p-2 text-xl border-none rounded-lg focus-outline font-bold appearance-none cursor-pointer mr-4"
                                 style={{
-                                    color: TITLE_RATING_MAP[titleRatings[jobDetails.title] || 0].color,
-                                    backgroundColor: TITLE_RATING_MAP[titleRatings[jobDetails.title] || 0].bgColor,
+                                    color: TITLE_RATING_MAP[titleRatings[jobDetails.title_lowercase] || 0].color,
+                                    backgroundColor: TITLE_RATING_MAP[titleRatings[jobDetails.title_lowercase] || 0].bgColor,
                                     width: '65px',
                                     textAlign: 'center'
                                 }}
@@ -664,18 +705,11 @@ const App = () => {
                         {isLoading ? (
                             <div className="color-gray-400">Loading...</div>
                         ) : descriptionView === 'live' ? (
+                            // The context menu is enabled here for highlighting on the pristine "Live" HTML
                             <div id="live-job-description" dangerouslySetInnerHTML={renderDescriptionWithHighlights(jobDetails.html_description, highlights)} onContextMenu={handleContextMenu} />
                         ) : (
-                            jobDetails.description ? (
-                                <div id="job-description-content" className="color-gray-700 leading-relaxed" onContextMenu={handleContextMenu} dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)} />
-                            ) : (
-                                <div
-                                    id="job-description-content"
-                                    className="color-gray-700 leading-relaxed"
-                                    onContextMenu={handleContextMenu}
-                                    dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)}
-                                />
-                            )
+                            // The context menu is enabled, but the 'Important' option will be hidden.
+                            <div id="job-description-content" className="color-gray-700 leading-relaxed" dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)} onContextMenu={handleContextMenu} />
                         )}
                     </section>
                     <section className="bg-white p-6 rounded-xl shadow-lg space-y-4">
@@ -705,6 +739,9 @@ const App = () => {
                 <div ref={contextMenuRef} id="custom-context-menu" style={{ left: contextMenuPos.x, top: contextMenuPos.y }}>
                     <button onClick={() => handleHighlightAction('like')} className="color-green-700"><ThumbUpIcon className="icon-base mr-2" /><span>Like (Green)</span></button>
                     <button onClick={() => handleHighlightAction('dislike')} className="color-red-700"><ThumbDownIcon className="icon-base mr-2" /><span>Dislike (Red)</span></button>
+                    {/* --- FIX: Enable important highlights in all views --- */}
+                    <button onClick={() => handleHighlightAction('very_important')} className="color-orange-500"><FireIcon className="icon-base mr-2" /><span>Very Important (Orange)</span></button>
+                    <button onClick={() => handleHighlightAction('important')} className="color-yellow-600"><StarIcon className="icon-base mr-2" /><span>Important (Yellow)</span></button>
                 </div>
             )}
 
