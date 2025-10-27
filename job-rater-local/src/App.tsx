@@ -101,33 +101,43 @@ const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
 
     highlightOrder.forEach(type => {
         const highlightsOfType = highlights.filter(h => h.type === type);
+        const isSpecificHighlight = type === 'like' || type === 'dislike';
+
         highlightsOfType.forEach(highlight => {
-            // --- NEW STRATEGY: Highlight line-by-line for important sections ---
-            if (type === 'very_important' || type === 'important') {
-                const lines = highlight.text.split('\n');
-                lines.forEach(line => {
-                    const trimmedLine = line.trim();
-                    // Only process non-empty lines
-                    if (trimmedLine.length > 0) {
-                        // Escape the line for use in the regex
-                        const escapedLine = trimmedLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(escapedLine, 'g');
-                        // Wrap matches in the appropriate span
-                        contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$&</span>`);
-                    }
-                });
-            } else {
-                // --- Existing logic for 'like'/'dislike' which works well for single phrases ---
-                const escapedText = highlight.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(${escapedText})`, 'gi');
-                contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$1</span>`);
-            }
+            const lines = highlight.text.split('\n').filter(line => line.trim().length > 0);
+            lines.forEach(line => {
+                const escapedLine = line.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(escapedLine, 'g');
+                
+                // --- FIX: Use a single, robust regex to handle all cases for like/dislike ---
+                if (isSpecificHighlight) {
+                    // This regex finds the text, optionally capturing a parent span if it exists.
+                    // The key change is making the initial part non-greedy and ensuring we match the text correctly.
+                    const masterRegex = new RegExp(`(<span class="[^"]+">)([^<]*?)(` + escapedLine + `)([^<]*?)(<\\/span>)|(` + escapedLine + `)`, 'g');
+                    contentHtml = contentHtml.replace(masterRegex, (match, openTag, before, textInSpan, after, closeTag, textOutsideSpan) => {
+                        // If openTag exists, we are inside another highlight span.
+                        if (openTag) {
+                            // Reconstruct the parent span, splitting it to inject the new, more specific highlight.
+                            const newSpan = `<span class="${classMap[type]}">${textInSpan}</span>`;
+                            const beforePart = before ? `${openTag}${before}${closeTag}` : '';
+                            const afterPart = after ? `${openTag}${after}${closeTag}` : '';
+                            return `${beforePart}${newSpan}${afterPart}`;
+                        } else {
+                            // We are not inside a span, so just wrap the text.
+                            return `<span class="${classMap[type]}">${textOutsideSpan}</span>`;
+                        }
+                    });
+                } else {
+                    // For 'important' and 'very_important', a simple global replace is fine
+                    // as they are applied first.
+                    contentHtml = contentHtml.replace(regex, `<span class="${classMap[type]}">$&</span>`);
+                }
+            });
         });
     });
 
     return { __html: contentHtml };
 };
-
 
 // --- ICON COMPONENTS ---
 const ChartBarIcon = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 22H2V11h2v11zM8 22H6V6h2v16zM12 22H10V2h2v20zM16 22H14V11h2v11zM20 22H18V6h2v16z" /></svg>);
@@ -601,7 +611,7 @@ const App = () => {
                 .leading-relaxed { line-height: 1.625; } .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .focus-outline:focus { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
                 .appearance-none { appearance: none; } .cursor-pointer { cursor: pointer; }
-                .highlighted-like { background-color: rgba(34, 197, 94, 0.3); } .highlighted-dislike { background-color: rgba(153, 27, 27, 0.3); } .highlighted-important { background-color: rgba(234, 179, 8, 0.3); } .highlighted-very-important { background-color: rgba(252, 101, 0, 0.4); font-weight: 700; }
+                .highlighted-like { background-color: rgba(34, 197, 94, 0.4); font-weight: 700; } .highlighted-dislike { background-color: rgba(199, 0, 27, 0.34); font-weight: 700; } .highlighted-important { background-color: rgba(234, 179, 8, 0.3); } .highlighted-very-important { background-color: rgba(252, 101, 0, 0.4); font-weight: 600; }
                 #custom-context-menu { position: fixed; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 100; padding: 4px; min-width: 150px; }
                 #custom-context-menu button { display: flex; align-items: center; width: 100%; text-align: left; padding: 8px; border-radius: 6px; }
                 #custom-context-menu button:hover { background-color: #eef2ff; }
