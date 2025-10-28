@@ -120,7 +120,10 @@ const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
         highlightsOfType.forEach(highlight => {
             const lines = highlight.text.split('\n').filter(line => line.trim().length > 0);
             lines.forEach(line => {
-                const escapedLine = line.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // --- FIX: Make regex robust against special HTML characters like '&' ---
+                let escapedLine = line.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Replace ampersand with a group that matches either the literal or the HTML entity.
+                escapedLine = escapedLine.replace(/&/g, '(?:&|&amp;)');
                 const regex = new RegExp(escapedLine, 'g');
                 
                 // --- FIX: Use a single, robust regex to handle all cases for like/dislike ---

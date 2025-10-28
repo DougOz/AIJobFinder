@@ -35,8 +35,15 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, m
 # --- Custom Transformers ---
 # This import is crucial! Even if not called directly, it makes the class
 # definitions available to joblib when it un-pickles the pipeline.
-from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer
-
+from custom_transformers import (
+    TitleRatingTransformer, 
+    SkillFeaturesTransformer, 
+    PrecomputedSegmentScoresTransformer,
+    # Also include others that might be in older pipeline versions for safety
+    SemanticScoreV2Transformer,
+    SemanticHighlightScorer,
+    PrecomputedHighlightTransformer
+)
 
 # 3rd party model imports
 try:
@@ -67,9 +74,11 @@ except ImportError:
 # --- CONFIGURATION ---
 # These must match the output file names from feature_engineering.py
 X_TRAIN_FILE = "X_train_transformed.npz"
-X_VAL_FILE = "X_val_transformed.npz"
 Y_TRAIN_FILE = "y_train.npy"
+X_VAL_FILE = "X_val_transformed.npz"
 Y_VAL_FILE = "y_val.npy"
+X_TEST_FILE = "X_test_transformed.npz" # <-- ADDED
+Y_TEST_FILE = "y_test.npy"             # <-- ADDED
 PIPELINE_FILE = "job_rating_pipeline.joblib" # <-- ADDED: Need this for feature names
 
 # Model-specific settings
@@ -88,13 +97,17 @@ def load_feature_data():
         X_val = load_npz(X_VAL_FILE)
         y_train = np.load(Y_TRAIN_FILE)
         y_val = np.load(Y_VAL_FILE)
+        X_test = load_npz(X_TEST_FILE) # <-- ADDED
+        y_test = np.load(Y_TEST_FILE)   # <-- ADDED
         
         print(f"  > Loaded X_train: {X_train.shape}")
         print(f"  > Loaded y_train: {y_train.shape}")
         print(f"  > Loaded X_val:   {X_val.shape}")
         print(f"  > Loaded y_val:   {y_val.shape}")
+        print(f"  > Loaded X_test:  {X_test.shape}") # <-- ADDED
+        print(f"  > Loaded y_test:  {y_test.shape}")   # <-- ADDED
         
-        return X_train, X_val, y_train, y_val
+        return X_train, X_val, y_train, y_val, X_test, y_test
 
     except FileNotFoundError as e:
         print(f"\n--- FATAL ERROR ---")
@@ -220,7 +233,7 @@ def plot_feature_importances(pipeline, model, model_name):
 
 def main():
     # 1. Load the data
-    X_train, X_val, y_train, y_val = load_feature_data()
+    X_train, X_val, y_train, y_val, X_test, y_test = load_feature_data()
     # The load function now exits on its own if data is not found,
     # so we don't need to check for None here.
 
@@ -259,10 +272,18 @@ def main():
         print("  > Stage 2: Tuning other hyperparameters with GridSearchCV...")
         
         param_grid = {
+            # --- V2.1: More aggressive regularization to combat overfitting ---
             'learning_rate': [0.05, 0.1], # Keep learning rate in the grid
             'num_leaves': [15, 20, 31],
             'reg_alpha': [0.1, 0.5, 2], # L1 regularization - increased max
             'reg_lambda': [0.1, 0.5, 2]  # L2 regularization - increased max
+
+            # 'learning_rate': [0.05], # Lock in a good learning rate
+            # 'num_leaves': [15, 25], # Constrain tree complexity
+            # 'max_depth': [5, 7], # Add max_depth to prevent deep, overfitting trees
+            # 'reg_alpha': [1, 5, 10], # L1 regularization - try much higher values
+            # 'reg_lambda': [1, 5, 10], # L2 regularization - try much higher values
+            # 'colsample_bytree': [0.7, 0.9] # Use a subset of features for each tree
         }
 
         lgbm_estimator = LGBMRegressor(
@@ -392,6 +413,27 @@ def main():
         print(f"Best performing model on validation set: '{best_model_name.upper()}' (R²: {best_model_data['r2_val']:.4f})")
         print(f"  > Best model saved to: {best_model_filename}")
 
+        # --- NEW: Final evaluation on combined validation + test set ---
+        print("\n--- Final Evaluation on Combined Validation + Test Set (150 samples) ---")
+        # Combine the validation and test sets for a more robust evaluation
+        X_combined = np.vstack([X_val.toarray(), X_test.toarray()])
+        y_combined = np.concatenate([y_val, y_test])
+
+        # Get predictions from the best model on this combined set
+        if best_model_name == 'blended':
+            lgbm_preds_combined = best_model_obj['lgbm_model'].predict(X_combined)
+            ridge_preds_combined = best_model_obj['ridge_model'].predict(X_combined)
+            y_pred_combined = (lgbm_preds_combined * best_model_obj['weights']['lgbm']) + \
+                              (ridge_preds_combined * best_model_obj['weights']['ridge'])
+        else:
+            y_pred_combined = best_model_obj.predict(X_combined)
+
+        # Evaluate and print the results
+        evaluate_model(
+            f"Final '{best_model_name.upper()}' on Combined Val+Test Set",
+            y_combined,
+            y_pred_combined
+        )
     
     # 5. Generate visualizations for the best model
     if MATPLOTLIB_INSTALLED:

@@ -41,20 +41,26 @@ def main():
         sys.exit(1)
 
     try:
-        # 1. Load all job descriptions
-        print("Loading all job descriptions from MongoDB...")
-        find_query = db[DICE_JOBS_COLLECTION].find({}, {"_id": 1, "description": 1})
+        # 1. Load job descriptions for RATED jobs that have been segmented
+        print("Loading segmented job descriptions from MongoDB...")
+        # This query targets only the ~400 jobs you've processed.
+        find_query = db[DICE_JOBS_COLLECTION].find(
+            {"very_important_text": {"$exists": True}}, 
+            {"_id": 1, "very_important_text": 1, "important_text": 1, "other_text": 1, "description": 1}
+        )
 
         if DEBUG_LIMIT:
             print(f"--- DEBUG MODE: Limiting to {DEBUG_LIMIT} jobs. ---")
             find_query = find_query.limit(DEBUG_LIMIT)
 
         jobs_cursor = find_query
-        jobs_df = pd.DataFrame(list(jobs_cursor))
+        jobs_df = pd.DataFrame(list(jobs_cursor)).set_index('_id')
         if jobs_df.empty:
-            print("No jobs found in the database. Exiting.")
+            print("No jobs found with segmented text fields. Please run 'process_highlights.py' first.")
             return
-        print(f"Loaded {len(jobs_df)} jobs.")
+        print(f"Loaded {len(jobs_df)} jobs with segmented text.")
+        # If 'other_text' is empty, fall back to the original description.
+        jobs_df['other_text'] = jobs_df['other_text'].fillna(jobs_df['description'])
 
         # 2. Load highlights
         highlights_df = pd.DataFrame(list(db[HIGHLIGHTS_COLLECTION].find()))
@@ -66,29 +72,39 @@ def main():
         scorer = SemanticHighlightScorer(highlights_df=highlights_df, model_name=SEMANTIC_MODEL_NAME)
         scorer.fit(None) # Fit doesn't require X data
 
-        # 4. Generate semantic scores for all jobs
-        # This is the slow part that we are running once.
-        job_descriptions = jobs_df['description'].fillna('')
-        semantic_scores = scorer.transform(job_descriptions)
+        # 4. Generate semantic scores for EACH text segment
+        print("\nGenerating semantic scores for 'very_important_text'...")
+        vi_scores = scorer.transform(jobs_df['very_important_text'].fillna(''))
+
+        print("Generating semantic scores for 'important_text'...")
+        i_scores = scorer.transform(jobs_df['important_text'].fillna(''))
+
+        print("Generating semantic scores for 'other_text'...")
+        o_scores = scorer.transform(jobs_df['other_text'].fillna(''))
 
         # 5. Prepare scores for database update
         print("\nPreparing scores for database update...")
-        feature_names = scorer.get_feature_names_out()
-        # The transform method returns a sparse matrix. We must convert it to a
-        # dense array for pandas to correctly create the multi-column DataFrame.
-        dense_scores = semantic_scores.toarray()
-        scores_df = pd.DataFrame(dense_scores, columns=feature_names)
+        # These are the generic names we'll use inside each sub-document
+        score_keys = ['max_liked', 'mean_liked', 'max_disliked', 'mean_disliked']
+
+        def create_scores_dict(scores_matrix, index):
+            return {key: float(val) for key, val in zip(score_keys, scores_matrix[index])}
 
         # 6. Save scores back to MongoDB
         print("Saving pre-computed scores back to MongoDB...")
         
         bulk_operations = []
-        for index, row in jobs_df.iterrows():
-            job_id = row['_id']
-            scores_to_set = scores_df.loc[index].to_dict()
-            
-            # Ensure values are native Python floats, not numpy types
-            update_payload = {k: float(v) for k, v in scores_to_set.items()}
+        # Convert sparse matrices to dense arrays for easier iteration
+        vi_scores_dense = vi_scores.toarray()
+        i_scores_dense = i_scores.toarray()
+        o_scores_dense = o_scores.toarray()
+
+        for i, job_id in enumerate(jobs_df.index):
+            update_payload = {
+                "very_important_scores": create_scores_dict(vi_scores_dense, i),
+                "important_scores": create_scores_dict(i_scores_dense, i),
+                "other_scores": create_scores_dict(o_scores_dense, i)
+            }
 
             bulk_operations.append(
                 UpdateOne(

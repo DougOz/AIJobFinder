@@ -41,7 +41,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 # --- Custom Transformers ---
 # Import our custom classes from their own file
-from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticHighlightScorer, SemanticScoreV2Transformer, PrecomputedHighlightTransformer
+from custom_transformers import TitleRatingTransformer, SkillFeaturesTransformer, SemanticScoreV2Transformer, PrecomputedSegmentScoresTransformer
 
 
 # --- CONFIGURATION ---
@@ -50,9 +50,6 @@ DICE_JOBS_COLLECTION = "dice_jobs"
 SKILLS_PROFICIENCY_COLLECTION = "skills_proficiency"
 TITLE_RATINGS_COLLECTION = "title_ratings"
 HIGHLIGHTS_COLLECTION = "training_highlights"
-
-# Sentence Transformer model to use
-SEMANTIC_MODEL_NAME = 'all-MiniLM-L6-v2'
 
 # Output file names
 PIPELINE_FILE = "job_rating_pipeline.joblib"
@@ -141,15 +138,15 @@ def load_data():
             # Fetch the corresponding job data from 'dice_jobs'
             job_doc = jobs_col.find_one(
                 {"_id": job_object_id}, # <-- Use the ObjectId here
+                # --- V2: Fetch new segmented text and score fields ---
                 {
-                    "description": 1, 
-                    "skills": 1, 
-                    "title": 1, 
-                    "semantic_score_v2": 1,
-                    "semantic_max_liked": 1, # <-- Fetch pre-computed score
-                    "semantic_mean_liked": 1, # <-- Fetch pre-computed score
-                    "semantic_max_disliked": 1, # <-- Fetch pre-computed score
-                    "semantic_mean_disliked": 1 # <-- Fetch pre-computed score
+                    "title": 1, "skills": 1, "description": 1,
+                    "very_important_text": 1,
+                    "important_text": 1,
+                    "other_text": 1,
+                    "very_important_scores": 1,
+                    "important_scores": 1,
+                    "other_scores": 1,
                 }
             )
             
@@ -185,14 +182,15 @@ def load_data():
                 "_id": rating_doc['_id'],
                 "overall_score": rating_doc['overall_score'],
                 "data_set": rating_doc.get('data_set'),
-                "job_description": job_doc.get('description'),
                 "title_rating": job_title_rating, # This is the rated value (or None)
                 "skills": assembled_skills, # This is the new list of skill objects
-                "semantic_score_v2": job_doc.get('semantic_score_v2'), # Add the new score
-                "semantic_max_liked": job_doc.get('semantic_max_liked'), # Add pre-computed score
-                "semantic_mean_liked": job_doc.get('semantic_mean_liked'), # Add pre-computed score
-                "semantic_max_disliked": job_doc.get('semantic_max_disliked'), # Add pre-computed score
-                "semantic_mean_disliked": job_doc.get('semantic_mean_disliked') # Add pre-computed score
+                # --- V2: Add new fields to the DataFrame ---
+                "very_important_text": job_doc.get('very_important_text'),
+                "important_text": job_doc.get('important_text'),
+                "other_text": job_doc.get('other_text', job_doc.get('description')), # Fallback
+                "very_important_scores": job_doc.get('very_important_scores'),
+                "important_scores": job_doc.get('important_scores'),
+                "other_scores": job_doc.get('other_scores'),
             }
 
             # Append to the correct list
@@ -254,38 +252,47 @@ def main():
 
     # --- Define Preprocessing Steps ---
     
-    # Note: We instantiate transformers directly. No need for extra Pipeline wrappers here.
-    
-    # Transformer for 'job_description' using TF-IDF
-    # Input: Series, Output: (n, vocab_size) sparse matrix
-    # We use a placeholder for description as TfidfVectorizer handles None
-    X_train['job_description'] = X_train['job_description'].fillna('')
-    X_val['job_description'] = X_val['job_description'].fillna('')
-    X_test['job_description'] = X_test['job_description'].fillna('')
-    
-    description_tfidf = TfidfVectorizer(
+    # --- V2: Define TF-IDF Vectorizers for each text segment ---
+    # We fill missing text with '' so the vectorizer can handle it.
+    X_train['very_important_text'] = X_train['very_important_text'].fillna('')
+    X_val['very_important_text'] = X_val['very_important_text'].fillna('')
+    X_test['very_important_text'] = X_test['very_important_text'].fillna('')
+
+    X_train['important_text'] = X_train['important_text'].fillna('')
+    X_val['important_text'] = X_val['important_text'].fillna('')
+    X_test['important_text'] = X_test['important_text'].fillna('')
+
+    X_train['other_text'] = X_train['other_text'].fillna('')
+    X_val['other_text'] = X_val['other_text'].fillna('')
+    X_test['other_text'] = X_test['other_text'].fillna('')
+
+    vi_tfidf = TfidfVectorizer(stop_words='english', max_features=2000, ngram_range=(1, 2))
+    i_tfidf = TfidfVectorizer(stop_words='english', max_features=2000, ngram_range=(1, 2))
+    other_tfidf = TfidfVectorizer(
         stop_words='english',
-        max_features=5000,  # Restore to 5000 as it performed better
-        ngram_range=(1, 2)  # Use 1- and 2-word phrases
+        max_features=3000, # Give 'other' text more features
+        ngram_range=(1, 2)
     )
     
-    
-    # --- Use ColumnTransformer to Apply Steps ---
-    # This applies the correct transformer to the correct column
-    # and stacks the results horizontally.
-    
+    # --- V2: Define the full preprocessor with new segmented features ---
     preprocessor = ColumnTransformer(
         transformers=[
             # (name, transformer_object, columns_to_apply_to)
             ('title', TitleRatingTransformer(), ['title_rating']),
-            ('semantic_v2', SemanticScoreV2Transformer(), ['semantic_score_v2']),
             ('skills', SkillFeaturesTransformer(), ['skills']),
-            ('tfidf', description_tfidf, 'job_description'),
-            # --- MODIFICATION ---
-            # Use the new, fast transformer that just selects pre-computed columns
-            ('highlights', PrecomputedHighlightTransformer(), [
-                'semantic_max_liked', 'semantic_mean_liked', 
-                'semantic_max_disliked', 'semantic_mean_disliked'
+            
+            # TF-IDF features for each text segment
+            ('vi_tfidf', vi_tfidf, 'very_important_text'),
+            ('i_tfidf', i_tfidf, 'important_text'),
+            ('other_tfidf', other_tfidf, 'other_text'),
+            
+            # Pre-computed semantic scores for each segment
+            ('segment_scores', PrecomputedSegmentScoresTransformer(
+                segment_columns=['very_important_scores', 'important_scores', 'other_scores'],
+                score_keys=['max_liked', 'mean_liked', 'max_disliked', 'mean_disliked'],
+                prefixes=['vi_', 'i_', 'o_']
+            ), [
+                'very_important_scores', 'important_scores', 'other_scores'
             ])
         ],
         remainder='drop',

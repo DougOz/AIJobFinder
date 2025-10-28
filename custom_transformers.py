@@ -230,3 +230,42 @@ class PrecomputedHighlightTransformer(BaseEstimator, TransformerMixin):
 
     def get_feature_names_out(self, input_features=None):
         return self.feature_names
+    
+class PrecomputedSegmentScoresTransformer(BaseEstimator, TransformerMixin):
+    """
+    Extracts pre-computed semantic scores from nested dictionary fields.
+    Handles segments like 'very_important_scores', 'important_scores', etc.
+    """
+    def __init__(self, segment_columns, score_keys, prefixes):
+        self.segment_columns = segment_columns # e.g., ['very_important_scores', 'important_scores']
+        self.score_keys = score_keys           # e.g., ['max_liked', 'mean_liked', ...]
+        self.prefixes = prefixes               # e.g., ['vi_', 'i_']
+
+    def fit(self, X, y=None):
+        return self # Nothing to fit
+
+    def transform(self, X, y=None):
+        all_features = []
+
+        for _, row in X.iterrows():
+            row_features = []
+            for col_name in self.segment_columns:
+                # Get the nested dictionary, default to an empty one if missing
+                scores_dict = row.get(col_name, {})
+                if not isinstance(scores_dict, dict):
+                    scores_dict = {}
+                
+                # Extract each score, defaulting to 0.0 if a key is missing
+                for key in self.score_keys:
+                    row_features.append(scores_dict.get(key, 0.0))
+            all_features.append(row_features)
+
+        dense_output = np.array(all_features)
+        return csr_matrix(dense_output)
+
+    def get_feature_names_out(self, input_features=None):
+        feature_names = []
+        for prefix in self.prefixes:
+            for key in self.score_keys:
+                feature_names.append(f"{prefix}{key}")
+        return feature_names
