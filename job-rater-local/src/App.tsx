@@ -82,8 +82,22 @@ const formatDescription = (text) => {
     return html;
 };
 
+// --- NEW: Utility for light formatting of raw text ---
+const lightlyFormatText = (text) => {
+    if (!text) return '';
+    // Add a space between a lowercase letter/punctuation and an uppercase letter (common sentence break issue)
+    // e.g., "end of sentence.Start of new" -> "end of sentence. Start of new"
+    return text.replace(/([a-z\)\."])([A-Z])/g, '$1 $2');
+};
+
 
 const renderDescriptionWithHighlights = (descriptionHtml, highlights) => {
+    // --- NEW: Handle plain text for the 'unformatted' view ---
+    // First, escape any potential HTML in the raw text to prevent rendering issues.
+    let isPlainText = !/<\/?[a-z][\s\S]*>/i.test(descriptionHtml);
+    if (isPlainText) {
+        descriptionHtml = descriptionHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
     if (!descriptionHtml) {
         return { __html: '<p class="color-red-600">Job description not available.</p>' };
     }
@@ -172,7 +186,7 @@ const App = () => {
     const [titleRatings, setTitleRatings] = useState({});
 
     const [jobInputIndex, setJobInputIndex] = useState('');
-    const [descriptionView, setDescriptionView] = useState('live');
+    const [descriptionView, setDescriptionView] = useState('formatted');
 
     // --- NEW: States for unsaved changes warning ---
     const [originalJobState, setOriginalJobState] = useState(null);
@@ -535,18 +549,21 @@ const App = () => {
         );
     };
     const HighlightsList = () => (
-        <ul id="highlights-list" className="list-disc list-inside space-y-1 text-sm color-gray-600">
-            {highlights.length === 0 ? <li className="color-gray-400 list-none">No highlights saved.</li> : highlights.map((h, i) => (
-                <li key={i} className="flex items-start justify-between">
-                    <span className="font-semibold mr-2 flex items-center">
-                        <span className={`w-2 h-2 rounded-full mr-2 ${
-                            h.type === 'like' ? 'bg-green-500' :
-                            h.type === 'dislike' ? 'bg-red-500' :
-                            h.type === 'very_important' ? 'bg-orange-500' :
-                            'bg-yellow-500' // Default for 'important'
-                        }`}></span>
-                        {h.text}</span>
-                    <button onClick={() => removeHighlight(h.text)} className="color-red-600 hover:color-red-800 text-xs flex-shrink-0 delete-btn" title="Remove">🗑️</button>
+        <ul id="highlights-list" className="text-sm color-gray-600 space-y-2">
+            {highlights.length === 0 ? <li className="color-gray-400 list-none p-2">No highlights saved.</li> : highlights.map((h, i) => (
+                <li key={i} className="flex items-start justify-between p-2 rounded-lg border border-gray-200">
+                    <span className="font-semibold mr-4 flex-grow">{h.text}</span>
+                    <div className="flex items-center flex-shrink-0">
+                        <span className={`text-xs font-bold uppercase mr-3 ${
+                            h.type === 'like' ? 'color-green-600' :
+                            h.type === 'dislike' ? 'color-red-600' :
+                            h.type === 'very_important' ? 'color-orange-500' :
+                            'color-yellow-600'
+                        }`}>
+                            {h.type.replace('_', ' ')}
+                        </span>
+                        <button onClick={() => removeHighlight(h.text)} className="color-red-600 hover:color-red-800 text-xs flex-shrink-0 delete-btn" title="Remove">🗑️</button>
+                    </div>
                 </li>
             ))}
         </ul>
@@ -559,7 +576,7 @@ const App = () => {
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
                 :root {
                     --color-indigo: #4f46e5; --color-indigo-hover: #4338ca; --color-gray-800: #1f2937;
-                    --color-gray-700: #374151; --color-gray-600: #4b5563; --color-gray-500: #6b7280;
+                    --color-gray-700: #374151; --color-gray-600: #4b5563; --color-gray-500: #6b7280; 
                     --color-gray-400: #9ca3af; --color-gray-300: #d1d5db; --color-gray-200: #e5e7eb; --color-yellow-500: #eab308;
                     --color-red-600: #dc2626; --color-red-800: #991b1b;
                     --color-yellow-600: #ca8a04; --color-green-600: #059669; --color-orange-500: #f97316;
@@ -620,6 +637,10 @@ const App = () => {
                 .delete-btn { opacity: 0.7; } .delete-btn:hover { opacity: 1; }
                 input[type=range].header-slider::-webkit-slider-thumb { -webkit-appearance: none; height: 1rem; width: 1rem; border-radius: 50%; background: var(--color-indigo); cursor: pointer; margin-top: -3px; }
                 .w-12 { width: 3rem; } .mx-1 { margin-left: 0.25rem; margin-right: 0.25rem; } .text-center { text-align: center; }
+            `}</style>
+            {/* --- NEW: Define background colors for the highlights list --- */}
+            <style>{`
+                .bg-list-green { background-color: #f0fdf4; } .bg-list-red { background-color: #fef2f2; } .bg-list-yellow { background-color: #fefce8; } .bg-list-orange { background-color: #fff7ed; }
             `}</style>
 
             <header className="sticky top-0 app-header shadow-md p-2 z-50">
@@ -709,26 +730,36 @@ const App = () => {
                     <section className="bg-white p-6 rounded-xl shadow-lg">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold color-gray-800">Job Description</h2>
-                            {jobDetails.html_description && (
-                                <button
-                                    onClick={() => {
-                                        setDescriptionView(prev => prev === 'live' ? 'formatted' : 'live');
-                                    }}
-                                    className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-indigo-200"
-                                >
-                                    <EyeIcon className="icon-xs mr-2" />
-                                    {descriptionView === 'live' ? 'View Formatted' : 'View Live'}
-                                </button>
-                            )}
+                            <button
+                                onClick={() => {
+                                    setDescriptionView(prev => {
+                                        if (jobDetails.html_description) {
+                                            if (prev === 'live') return 'formatted';
+                                            if (prev === 'formatted') return 'unformatted';
+                                            return 'live'; // from 'unformatted'
+                                        } else {
+                                            // Cycle between formatted and unformatted if no live view
+                                            return prev === 'formatted' ? 'unformatted' : 'formatted';
+                                        }
+                                    });
+                                }}
+                                className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg text-sm font-semibold hover:bg-indigo-200"
+                            >
+                                <EyeIcon className="icon-xs mr-2" />
+                                {descriptionView === 'live' && 'View Formatted'}
+                                {descriptionView === 'formatted' && (jobDetails.html_description ? 'View Unformatted' : 'View Unformatted')}
+                                {descriptionView === 'unformatted' && (jobDetails.html_description ? 'View Live' : 'View Formatted')}
+                            </button>
                         </div>
 
                         {isLoading ? (
                             <div className="color-gray-400">Loading...</div>
                         ) : descriptionView === 'live' ? (
-                            // The context menu is enabled here for highlighting on the pristine "Live" HTML
                             <div id="live-job-description" dangerouslySetInnerHTML={renderDescriptionWithHighlights(jobDetails.html_description, highlights)} onContextMenu={handleContextMenu} />
+                        ) : descriptionView === 'unformatted' ? (
+                            <div id="unformatted-job-description" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }} onContextMenu={handleContextMenu}
+                                dangerouslySetInnerHTML={renderDescriptionWithHighlights(lightlyFormatText(jobDetails.description), highlights)} />
                         ) : (
-                            // The context menu is enabled, but the 'Important' option will be hidden.
                             <div id="job-description-content" className="color-gray-700 leading-relaxed" dangerouslySetInnerHTML={renderDescriptionWithHighlights(formatDescription(jobDetails.description), highlights)} onContextMenu={handleContextMenu} />
                         )}
                     </section>
