@@ -21,17 +21,19 @@ pip install numpy scikit-learn scipy lightgbm xgboost matplotlib pandas
 import numpy as np
 import joblib
 import pandas as pd # <-- ADDED: For feature importance plotting
+import csv # <-- NEW: For logging results
 import sys
 from scipy.sparse import load_npz
-from time import time
-
+from time import time, sleep
+import datetime
 # sklearn imports
 from sklearn.linear_model import Ridge
+from sklearn.compose import ColumnTransformer # <-- NEW
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import LinearSVR # <-- ADDED: Another strong linear-style model
 from sklearn.model_selection import GridSearchCV # <-- ADDED: For hyperparameter tuning
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, median_absolute_error # <-- ADDED: More metrics
-
+from feature_engineering import EXCLUDE_GROUP_FOR_ABLATION
 # --- Custom Transformers ---
 # This import is crucial! Even if not called directly, it makes the class
 # definitions available to joblib when it un-pickles the pipeline.
@@ -79,6 +81,7 @@ X_VAL_FILE = "X_val_transformed.npz"
 Y_VAL_FILE = "y_val.npy"
 X_TEST_FILE = "X_test_transformed.npz" # <-- ADDED
 Y_TEST_FILE = "y_test.npy"             # <-- ADDED
+TRANSFORMER_LIST_FILE = "transformer_list.joblib" # <-- NEW
 PIPELINE_FILE = "job_rating_pipeline.joblib" # <-- ADDED: Need this for feature names
 
 # Model-specific settings
@@ -86,6 +89,15 @@ RANDOM_STATE = 42 # For reproducibility
 N_JOBS = -1 # Use all available CPU cores
 # --- END CONFIGURATION ---
 
+# --- NEW: For Ablation Study Logging ---
+RESULTS_CSV_FILE = "ablation_study_results.csv"
+
+# --- ABLATION STUDY CONFIGURATION ---
+# Set this to the name of the feature group that was excluded during feature engineering.
+# This ensures the results are logged correctly. Set to None if all features were used.
+# Options: 'title', 'skills', 'vi_tfidf', 'i_tfidf', 'other_tfidf', 'segment_scores'
+EXCLUDED_GROUP_FOR_LOGGING = EXCLUDE_GROUP_FOR_ABLATION
+# ------------------------------------
 
 def load_feature_data():
     """
@@ -120,7 +132,7 @@ def load_feature_data():
         sys.exit(1) # Exit the script with an error code
 
 
-def evaluate_model(model_name, y_val, y_pred):
+def evaluate_model(model_name, y_val, y_pred, excluded_group, run_timestamp):
     """
     Calculates and prints evaluation metrics for a model.
     """
@@ -135,6 +147,25 @@ def evaluate_model(model_name, y_val, y_pred):
     print(f"  Median Absolute Error (MedAE): {medae:.4f}") # <-- ADDED
     print(f"  Root Mean Squared Error (RMSE): {rmse:.4f}")
     print(f"  (MAE means the model's predictions are, on average, +/- {mae:.2f} points from your true score)")
+
+    # --- NEW: Log results to CSV ---
+    log_entry = {
+        'timestamp': run_timestamp,
+        'excluded_group': excluded_group if excluded_group else 'none',
+        'model_name': model_name,
+        'r_squared': r2,
+        'mae': mae,
+        'rmse': rmse,
+        'medae': medae
+    }
+    
+    file_exists = pd.io.common.file_exists(RESULTS_CSV_FILE)
+    with open(RESULTS_CSV_FILE, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=log_entry.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(log_entry)
+    # --- END NEW ---
 
     return r2 # Return R-squared for comparison
 def plot_diagnostics(y_val, y_pred, model_name):
@@ -232,6 +263,15 @@ def plot_feature_importances(pipeline, model, model_name):
 
 
 def main():
+    excluded_group = EXCLUDED_GROUP_FOR_LOGGING
+    run_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if excluded_group:
+        print(f"\n--- RUNNING ABLATION STUDY: EXCLUDING '{excluded_group}' ---")
+    else:
+        print("\n--- RUNNING FULL-FEATURE MODEL ---")
+    # --- END NEW ---
+
     # 1. Load the data
     X_train, X_val, y_train, y_val, X_test, y_test = load_feature_data()
     # The load function now exits on its own if data is not found,
@@ -274,10 +314,9 @@ def main():
         param_grid = {
             # --- V2.1: More aggressive regularization to combat overfitting ---
             'learning_rate': [0.1], # Keep learning rate in the grid
-            'num_leaves': [15, 20, 31],
-            'reg_alpha': [0.1, 0.5, 2], # L1 regularization - increased max
-            'reg_lambda': [0.1, 0.5, 2]  # L2 regularization - increased max
-            
+            'num_leaves': [15], #was 15, 20, 31
+            'reg_alpha': [0.5, 2], # L1 regularization - increased max
+            'reg_lambda': [0.1, 0.5, 2],  # L2 regularization - increased max            
             # 'learning_rate': [0.05], # Lock in a good learning rate
             # 'num_leaves': [15, 25], # Constrain tree complexity
             # 'max_depth': [5, 7], # Add max_depth to prevent deep, overfitting trees
@@ -314,10 +353,10 @@ def main():
         
         # Evaluate on training set
         y_pred_lgbm_train = lgbm_model.predict(X_train)
-        evaluate_model("LGBM Regressor (Advanced) - Training", y_train, y_pred_lgbm_train)
+        evaluate_model("LGBM Regressor (Advanced) - Training", y_train, y_pred_lgbm_train, excluded_group, run_timestamp)
 
         # Evaluate
-        r2_lgbm = evaluate_model("LGBM Regressor (Advanced)", y_val, y_pred_lgbm)
+        r2_lgbm = evaluate_model("LGBM Regressor (Advanced)", y_val, y_pred_lgbm, excluded_group, run_timestamp)
         trained_models['lgbm'] = {'model': lgbm_model, 'r2_val': r2_lgbm}
 
     # 2. Train and evaluate the BASELINE model (Ridge Regression)
@@ -338,10 +377,10 @@ def main():
     
     # Evaluate on training set
     y_pred_ridge_train = ridge_model.predict(X_train)
-    evaluate_model("Ridge Regression (Baseline) - Training", y_train, y_pred_ridge_train)
+    evaluate_model("Ridge Regression (Baseline) - Training", y_train, y_pred_ridge_train, excluded_group, run_timestamp)
 
     # Evaluate
-    r2_ridge = evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge)
+    r2_ridge = evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge, excluded_group, run_timestamp)
     trained_models['ridge'] = {'model': ridge_model, 'r2_val': r2_ridge}
 
     # --- Blended Model ---
@@ -355,7 +394,7 @@ def main():
         y_pred_blended = (y_pred_lgbm * lgbm_weight) + (y_pred_ridge * ridge_weight)
         
         # Evaluate the blended predictions
-        r2_blended = evaluate_model(f"Blended Model ({lgbm_weight*100:.0f}% LGBM, {ridge_weight*100:.0f}% Ridge)", y_val, y_pred_blended)
+        r2_blended = evaluate_model(f"Blended Model ({lgbm_weight*100:.0f}% LGBM, {ridge_weight*100:.0f}% Ridge)", y_val, y_pred_blended, excluded_group, run_timestamp)
         
         # The "blended model" is a dictionary of its components
         blended_model_obj = {
@@ -390,10 +429,10 @@ def main():
     
     # Evaluate on training set
     y_pred_svr_train = svr_model.predict(X_train)
-    evaluate_model("LinearSVR - Training", y_train, y_pred_svr_train)
+    evaluate_model("LinearSVR - Training", y_train, y_pred_svr_train, excluded_group, run_timestamp)
 
     # Evaluate
-    r2_svr = evaluate_model("LinearSVR", y_val, y_pred_svr)
+    r2_svr = evaluate_model("LinearSVR", y_val, y_pred_svr, excluded_group, run_timestamp)
     trained_models['svr'] = {'model': svr_model, 'r2_val': r2_svr}
 
 
@@ -432,7 +471,8 @@ def main():
         evaluate_model(
             f"Final '{best_model_name.upper()}' on Combined Val+Test Set",
             y_combined,
-            y_pred_combined
+            y_pred_combined,
+            excluded_group, run_timestamp
         )
     
     # 5. Generate visualizations for the best model

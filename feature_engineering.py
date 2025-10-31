@@ -53,6 +53,7 @@ HIGHLIGHTS_COLLECTION = "training_highlights"
 
 # Output file names
 PIPELINE_FILE = "job_rating_pipeline.joblib"
+TRANSFORMER_LIST_FILE = "transformer_list.joblib" # <-- NEW
 X_TRAIN_FILE = "X_train_transformed.npz"
 X_VAL_FILE = "X_val_transformed.npz"
 X_TEST_FILE = "X_test_transformed.npz"
@@ -60,6 +61,12 @@ Y_TRAIN_FILE = "y_train.npy"
 Y_VAL_FILE = "y_val.npy"
 Y_TEST_FILE = "y_test.npy"
 # --- END CONFIGURATION ---
+
+# --- ABLATION STUDY CONFIGURATION ---
+# Set this to the name of the feature group you want to exclude, or None to run with all features.
+# Options: 'title', 'skills', 'vi_tfidf', 'i_tfidf', 'other_tfidf', 'segment_scores'
+EXCLUDE_GROUP_FOR_ABLATION = 'vi_tfidf'
+# ------------------------------------
 
 
 def load_data():
@@ -228,6 +235,7 @@ def load_data():
 
 # --- MAIN EXECUTION ---
 def main():
+    excluded_group = EXCLUDE_GROUP_FOR_ABLATION
     # 1. Load Data
     try:
         train_df, val_df, test_df, highlights_df = load_data()
@@ -275,26 +283,36 @@ def main():
     )
     
     # --- V2: Define the full preprocessor with new segmented features ---
+    # Define the list of transformers to be used. We will save this list
+    # so the training script can modify it for the ablation study.
+    transformer_list = [
+        # (name, transformer_object, columns_to_apply_to)
+        ('title', TitleRatingTransformer(), ['title_rating']),
+        ('skills', SkillFeaturesTransformer(), ['skills']),
+        
+        # TF-IDF features for each text segment
+        ('vi_tfidf', vi_tfidf, 'very_important_text'),
+        ('i_tfidf', i_tfidf, 'important_text'),
+        ('other_tfidf', other_tfidf, 'other_text'),
+        
+        # Pre-computed semantic scores for each segment
+        ('segment_scores', PrecomputedSegmentScoresTransformer(
+            segment_columns=['very_important_scores', 'important_scores', 'other_scores'],
+            score_keys=['max_liked', 'mean_liked', 'max_disliked', 'mean_disliked'],
+            prefixes=['vi_', 'i_', 'o_']
+        ), ['very_important_scores', 'important_scores', 'other_scores'])
+    ]
+
+    # --- NEW: Dynamically modify the transformer list for the ablation study ---
+    if excluded_group:
+        print(f"\n--- RUNNING ABLATION STUDY: EXCLUDING '{excluded_group}' ---")
+        transformer_list = [t for t in transformer_list if t[0] != excluded_group]
+    else:
+        print("\n--- RUNNING FULL-FEATURE MODEL ---")
+    # --- END NEW ---
+
     preprocessor = ColumnTransformer(
-        transformers=[
-            # (name, transformer_object, columns_to_apply_to)
-            ('title', TitleRatingTransformer(), ['title_rating']),
-            ('skills', SkillFeaturesTransformer(), ['skills']),
-            
-            # TF-IDF features for each text segment
-            ('vi_tfidf', vi_tfidf, 'very_important_text'),
-            ('i_tfidf', i_tfidf, 'important_text'),
-            ('other_tfidf', other_tfidf, 'other_text'),
-            
-            # Pre-computed semantic scores for each segment
-            ('segment_scores', PrecomputedSegmentScoresTransformer(
-                segment_columns=['very_important_scores', 'important_scores', 'other_scores'],
-                score_keys=['max_liked', 'mean_liked', 'max_disliked', 'mean_disliked'],
-                prefixes=['vi_', 'i_', 'o_']
-            ), [
-                'very_important_scores', 'important_scores', 'other_scores'
-            ])
-        ],
+        transformers=transformer_list,
         remainder='drop',
         n_jobs=None, # Keep parallel processing off for stability
         # Force the output to be a sparse matrix, even if density > 0.3
@@ -333,6 +351,10 @@ def main():
     # Save the fitted pipeline
     joblib.dump(full_pipeline, PIPELINE_FILE)
     print(f"  > Fitted pipeline saved to: {PIPELINE_FILE}")
+
+    # --- NEW: Save the list of transformers for the ablation study ---
+    joblib.dump(transformer_list, TRANSFORMER_LIST_FILE)
+    print(f"  > Transformer list saved to: {TRANSFORMER_LIST_FILE}")
 
     # Save the transformed sparse matrices
     save_npz(X_TRAIN_FILE, X_train_transformed)
