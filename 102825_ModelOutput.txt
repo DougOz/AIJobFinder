@@ -1,0 +1,84 @@
+--- Results for: LGBM Regressor (Advanced) - Training ---
+  R-squared (R²):               0.9728
+  Mean Absolute Error (MAE):    0.1853
+  Median Absolute Error (MedAE): 0.1474
+  Root Mean Squared Error (RMSE): 0.2537
+  (MAE means the model's predictions are, on average, +/- 0.19 points from your true score)
+
+--- Results for: LGBM Regressor (Advanced) ---
+  R-squared (R²):               0.5384
+  Mean Absolute Error (MAE):    0.8411
+  Median Absolute Error (MedAE): 0.7058
+  Root Mean Squared Error (RMSE): 1.0477
+  (MAE means the model's predictions are, on average, +/- 0.84 points from your true score)
+
+
+--- Training Baseline Models ---
+Training Baseline Model (Ridge Regression)...
+  > Training complete in 0.11 seconds.
+
+--- Results for: Ridge Regression (Baseline) - Training ---
+  R-squared (R²):               0.9316
+  Mean Absolute Error (MAE):    0.3036
+  Median Absolute Error (MedAE): 0.2410
+  Root Mean Squared Error (RMSE): 0.4022
+  (MAE means the model's predictions are, on average, +/- 0.30 points from your true score)
+
+--- Results for: Ridge Regression (Baseline) ---
+  R-squared (R²):               0.5120
+  Mean Absolute Error (MAE):    0.8621
+  Median Absolute Error (MedAE): 0.7511
+  Root Mean Squared Error (RMSE): 1.0773
+  (MAE means the model's predictions are, on average, +/- 0.86 points from your true score)
+
+
+--- Creating a Blended Model (LGBM + Ridge) ---
+
+--- Results for: Blended Model (50% LGBM, 50% Ridge) ---
+  R-squared (R²):               0.5664
+  Mean Absolute Error (MAE):    0.8218
+  Median Absolute Error (MedAE): 0.7109
+  Root Mean Squared Error (RMSE): 1.0155
+  (MAE means the model's predictions are, on average, +/- 0.82 points from your true score)
+
+Training Second Linear-Style Model (LinearSVR)...
+  > Training complete in 0.56 seconds.
+
+--- Results for: LinearSVR - Training ---
+  R-squared (R²):               0.9491
+  Mean Absolute Error (MAE):    0.0974
+  Median Absolute Error (MedAE): 0.0000
+  Root Mean Squared Error (RMSE): 0.3471
+  (MAE means the model's predictions are, on average, +/- 0.10 points from your true score)
+
+--- Results for: LinearSVR ---
+  R-squared (R²):               0.4917
+  Mean Absolute Error (MAE):    0.8823
+  Median Absolute Error (MedAE): 0.7689
+  Root Mean Squared Error (RMSE): 1.0994
+  (MAE means the model's predictions are, on average, +/- 0.88 points from your true score)
+
+--- Model Comparison Complete! ---
+
+--- Best Model Selection ---
+Best performing model on validation set: 'BLENDED' (R²: 0.5664)
+  > Best model saved to: best_model.joblib
+
+--- Final Evaluation on Combined Validation + Test Set (150 samples) ---
+f:\JobFinder\AIJobFinder\env1\Lib\site-packages\sklearn\utils\validation.py:2749: UserWarning: X does not have valid feature names, but LGBMRegressor was fitted with feature names
+  warnings.warn(
+
+--- Results for: Final 'BLENDED' on Combined Val+Test Set ---
+  R-squared (R²):               0.5565
+  Mean Absolute Error (MAE):    0.8073
+  Median Absolute Error (MedAE): 0.7109
+  Root Mean Squared Error (RMSE): 1.0192
+  (MAE means the model's predictions are, on average, +/- 0.81 points from your true score)
+
+--- Generating Visualizations ---
+
+Generating diagnostic plots for Best Model: BLENDED...
+  > Diagnostic plots saved to: diagnostic_plots.png
+
+Generating feature importance plot for LightGBM (from Blend)...
+  > Feature importance plot saved to: lightgbm_(from_blend)_feature_importances.png
