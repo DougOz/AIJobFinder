@@ -357,7 +357,7 @@ def main():
 
         # Evaluate
         r2_lgbm = evaluate_model("LGBM Regressor (Advanced)", y_val, y_pred_lgbm, excluded_group, run_timestamp)
-        trained_models['lgbm'] = {'model': lgbm_model, 'r2_val': r2_lgbm}
+        trained_models['lgbm'] = {'model': lgbm_model, 'r2_val': r2_lgbm, 'y_pred_val': y_pred_lgbm}
 
     # 2. Train and evaluate the BASELINE model (Ridge Regression)
     print("\n\n--- Training Baseline Models ---")
@@ -381,7 +381,7 @@ def main():
 
     # Evaluate
     r2_ridge = evaluate_model("Ridge Regression (Baseline)", y_val, y_pred_ridge, excluded_group, run_timestamp)
-    trained_models['ridge'] = {'model': ridge_model, 'r2_val': r2_ridge}
+    trained_models['ridge'] = {'model': ridge_model, 'r2_val': r2_ridge, 'y_pred_val': y_pred_ridge}
 
     # --- Blended Model ---
     # If we have both models, let's try blending their predictions
@@ -433,7 +433,7 @@ def main():
 
     # Evaluate
     r2_svr = evaluate_model("LinearSVR", y_val, y_pred_svr, excluded_group, run_timestamp)
-    trained_models['svr'] = {'model': svr_model, 'r2_val': r2_svr}
+    trained_models['svr'] = {'model': svr_model, 'r2_val': r2_svr, 'y_pred_val': y_pred_svr}
 
 
     print("\n--- Model Comparison Complete! ---")
@@ -449,7 +449,40 @@ def main():
         joblib.dump(best_model_obj, best_model_filename)
         
         print(f"\n--- Best Model Selection ---")
-        print(f"Best performing model on validation set: '{best_model_name.upper()}' (R²: {best_model_data['r2_val']:.4f})")
+        print(f"Best performing model (by simple average): '{best_model_name.upper()}' (R²: {best_model_data['r2_val']:.4f})")
+
+        # --- NEW: Optimize weights for the best blend ---
+        if best_model_name.startswith('blend'):
+            print("\n--- Optimizing Weights for the Best Blend ---")
+            
+            # --- FIX: Correctly identify component models from the object ---
+            # Instead of looking for 'component_models', find keys that end with '_model'.
+            component_model_keys = [key for key in best_model_obj.keys() if key.endswith('_model')]
+            component_names = [key.replace('_model', '') for key in component_model_keys]
+            
+            # Create a new training set from the validation predictions of the component models
+            meta_X_train = np.column_stack([
+                trained_models[name]['y_pred_val'] for name in component_names
+            ])
+            
+            # The target is still the actual validation scores
+            meta_y_train = y_val
+            
+            # Train a simple linear model to find the best weights. positive=True ensures no negative weights.
+            weight_optimizer = Ridge(alpha=0.0, positive=True, fit_intercept=False)
+            weight_optimizer.fit(meta_X_train, meta_y_train)
+            
+            # Normalize the learned coefficients to sum to 1
+            optimized_weights = weight_optimizer.coef_ / weight_optimizer.coef_.sum()
+            
+            # Update the model object with the new weights
+            best_model_obj['weights'] = {name: weight for name, weight in zip(component_names, optimized_weights)}
+            
+            print("  > Optimized weights found:")
+            for name, weight in best_model_obj['weights'].items():
+                print(f"    - {name.upper()}: {weight:.2%}")
+
+
         print(f"  > Best model saved to: {best_model_filename}")
 
         # --- NEW: Final evaluation on combined validation + test set ---

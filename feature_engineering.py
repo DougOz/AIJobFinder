@@ -28,21 +28,6 @@ pip install pandas numpy scikit-learn joblib pymongo scipy sentence-transformers
 import pandas as pd
 import numpy as np
 import joblib
-
-# --- NEW: Imports for advanced text processing ---
-try:
-    import nltk
-    from nltk.stem import WordNetLemmatizer
-    from nltk.corpus import stopwords
-    nltk.download('wordnet', quiet=True)
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-    nltk.download('punkt_tab', quiet=True)
-except ImportError:
-    print("Warning: NLTK not found. Lemmatization will be disabled. To install, run: pip install nltk")
-    nltk = None
-# --- END NEW ---
-
 from scipy.sparse import save_npz, hstack, csr_matrix
 from pymongo import MongoClient
 from mongodb_functions import connect_to_mongodb, DATABASE_NAME
@@ -83,25 +68,6 @@ Y_TEST_FILE = "y_test.npy"
 EXCLUDE_GROUP_FOR_ABLATION = None
 # ------------------------------------
 
-# --- NEW: Custom Tokenizer with Lemmatization ---
-class LemmaTokenizer:
-    def __init__(self):
-        if not nltk:
-            raise ImportError("NLTK is required for LemmaTokenizer.")
-        self.lemmatizer = WordNetLemmatizer()
-        # Use a set for faster lookups
-        self.stop_words = set(stopwords.words('english'))
-
-    def __call__(self, doc):
-        # 1. Tokenize: Split string into words and convert to lowercase
-        # 2. Filter: Remove stop words and short tokens
-        # 3. Lemmatize: Reduce words to their base form
-        tokens = []
-        for t in nltk.word_tokenize(doc):
-            t_lower = t.lower()
-            if t_lower.isalpha() and len(t_lower) > 2 and t_lower not in self.stop_words:
-                tokens.append(self.lemmatizer.lemmatize(t_lower))
-        return tokens
 
 def load_data():
     """
@@ -308,24 +274,13 @@ def main():
     X_val['other_text'] = X_val['other_text'].fillna('')
     X_test['other_text'] = X_test['other_text'].fillna('')
 
-    # --- STRATEGY 1: Enhanced TF-IDF with Lemmatization and better filtering ---
-    # Use a custom tokenizer if NLTK is available, otherwise fall back to default.
-    tokenizer = LemmaTokenizer() if nltk else None
-    stop_words = 'english' if not tokenizer else None # Don't use built-in stop words if tokenizer handles it
-
-    vi_tfidf = TfidfVectorizer(
-        tokenizer=tokenizer, stop_words=stop_words, ngram_range=(1, 2),
-        max_df=0.8, min_df=5, max_features=2000
-    )
-    i_tfidf = TfidfVectorizer(
-        tokenizer=tokenizer, stop_words=stop_words, ngram_range=(1, 2),
-        max_df=0.8, min_df=5, max_features=2000
-    )
+    vi_tfidf = TfidfVectorizer(stop_words='english', max_features=2000, ngram_range=(1, 2))
+    i_tfidf = TfidfVectorizer(stop_words='english', max_features=2000, ngram_range=(1, 2))
     other_tfidf = TfidfVectorizer(
-        tokenizer=tokenizer, stop_words=stop_words, ngram_range=(1, 2),
-        max_df=0.7, min_df=5, max_features=3000
+        stop_words='english',
+        max_features=3000, # Give 'other' text more features
+        ngram_range=(1, 2)
     )
-    # --- END STRATEGY 1 ---
     
     # --- V2: Define the full preprocessor with new segmented features ---
     # Define the list of transformers to be used. We will save this list
