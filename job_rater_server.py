@@ -38,27 +38,53 @@ DEFAULT_PROFILE_NAME = 'Doug'
 @app.route('/api/jobs', methods=['GET'])
 def get_job_list():
     """
-    Returns a list of job IDs for jobs that have already been rated
-    with an overall_score > 0 for the default profile.
+    Returns a list of job IDs for jobs that have not yet been rated
+    and have a title_rating of 2 or higher for the default profile.
     """
-    if ratings_collection is None:
-        return jsonify({"error": "Database 'job_ratings' collection is unavailable."}), 500
+    if jobs_collection is None or ratings_collection is None or title_ratings_collection is None:
+        return jsonify({"error": "One or more database collections are unavailable."}), 500
     try:
-        # --- MODIFICATION: Fetch rated jobs instead of all jobs ---
-        query = {
-            "profile_name": DEFAULT_PROFILE_NAME,
-            "overall_score": {"$gt": 0}
-        }
-        # Project only the job_id field and exclude the MongoDB _id field.
-        rated_jobs_cursor = ratings_collection.find(query, {"job_id": 1, "_id": 0})
-        job_ids = [doc['job_id'] for doc in rated_jobs_cursor]
-        # --- END MODIFICATION ---
-        
-        #random.shuffle(job_ids)
-        if not job_ids:
-            print(f"MongoDB '{jobs_collection.name}' collection is empty or no jobs match the filter.")
-            return jsonify([])
+        # --- OPTIMIZATION: Fetch rated job IDs first to reduce the main query size ---
+        # 1. Get the list of all job IDs that have already been rated for the current profile.
+        rated_jobs_cursor = ratings_collection.find(
+            {"profile_name": DEFAULT_PROFILE_NAME, "overall_score": {"$gt": 0}},
+            {"job_id": 1, "_id": 0}
+        )
+        # Convert string IDs to ObjectIds for matching against the `dice_jobs` _id field.
+        rated_job_ids = [ObjectId(doc['job_id']) for doc in rated_jobs_cursor if 'job_id' in doc]
+        print(f"Found {len(rated_job_ids)} rated jobs to exclude.")
+
+        # 2. Build the aggregation pipeline.
+        pipeline = [
+            # This is much faster than a $lookup on the entire collection.
+            {"$match": {"_id": {"$nin": rated_job_ids}}},
+            
+            # Step 2: Create a 'title_lowercase' field on the fly for the join.
+            {
+                "$addFields": {
+                    "title_lowercase": {"$toLower": "$title"}
+                }
+            },
+            # Step 3: Join with title_ratings_collection to get title ratings.
+            {
+                "$lookup": {
+                    "from": title_ratings_collection.name,
+                    "localField": "title_lowercase",
+                    "foreignField": "title",
+                    "as": "title_rating_info"
+                },
+            },
+            # Step 4: Filter for jobs where title_rating is >= 2.
+            {"$match": {"title_rating_info.rating": {"$gte": 2}}},
+            # Step 5: Project only the job ID for the final output.
+            {"$project": {"_id": 1}}
+        ]
+        job_cursor = jobs_collection.aggregate(pipeline)
+        job_ids = [str(doc['_id']) for doc in job_cursor]
+        print(f"Found {len(job_ids)} unrated jobs with title rating >= 2.")
+        random.shuffle(job_ids)
         return jsonify(job_ids)
+        # --- END OPTIMIZATION ---
     except Exception as e:
         print(f"Error fetching job list: {e}")
         return jsonify({"error": f"Internal server error when listing jobs: {e}"}), 500
